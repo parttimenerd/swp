@@ -1,7 +1,5 @@
 package swp.parser.lr;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import swp.Config;
 import swp.SWPException;
 import swp.grammar.ExtGrammarBuilder;
@@ -10,6 +8,7 @@ import swp.lexer.Lexer;
 import swp.lexer.automata.AutomatonLexer;
 import swp.lexer.automata.LexerDescriptionParser;
 import swp.lexer.automata.Table;
+import swp.util.Cache;
 import swp.util.Pair;
 
 import java.io.*;
@@ -23,8 +22,7 @@ public class Generator {
 
 	public final static boolean OUTPUT_GRAPHS_IF_CACHED = false;
 
-	private static Cache<String, Pair<Table, LRParserTable>> cache = Caffeine.newBuilder()
-			.maximumSize(10).build();
+	private static Cache<String, Pair<Table, LRParserTable>> cache = new Cache<>(10);
 
 	public static <E extends Enum<E> & LexerTerminalEnum> Generator getCachedIfPossible(
 			String id, Class<E> lexerDescription,
@@ -90,7 +88,7 @@ public class Generator {
 					try {
 						pair = load(id);
 					} catch (ClassNotFoundException | IOException e) {
-						e.printStackTrace();
+						pair = null;
 					}
 				}
 				if (pair == null){
