@@ -2,8 +2,8 @@ package swp;
 
 import swp.grammar.Grammar;
 import swp.grammar.GrammarBuilder;
+import swp.grammar.random.SentenceGenerator;
 import swp.lexer.alphabet.AlphabetTerminals;
-import swp.parser.lr.DiffGraph;
 import swp.parser.lr.Graph;
 
 public class Main {
@@ -25,17 +25,27 @@ public class Main {
 
 	    GrammarBuilder builder = new GrammarBuilder(AlphabetTerminals.getInstance());
 	    builder.add("AB", '(', "AB", ')')
-			    //.add("AB", "")
 			    .add("AB", "BB")
-			    .add("BB", "AB", '4', "BB");
+			    .add("BB", "AB", '4', "BB")
+	            .add("BB", "b");
 
 	    Grammar g2 = builder.toGrammar("AB");
+	    System.out.println(g2.calculateSingleProductionNonTerminals());
+	    SentenceGenerator gen2 = new SentenceGenerator(g2);
+	    while (1 == Math.abs(1)) System.out.println(gen2.generateRandomSentence());
 
-	    new DiffGraph(g2, "/tmp/lalr").createPNGs().createMP4(1);
+	    GrammarBuilder builder2 = new GrammarBuilder(AlphabetTerminals.getInstance());
+	    builder2.add("AB", '(', "BB", ')')
+	            .add("BB", "BB", "BB")
+	            .add("BB", 'c');
+	    Grammar g3 = builder2.toGrammar("AB");
+	    SentenceGenerator gen = new SentenceGenerator(g3);
+	    System.out.println(gen.generateRandomSentence());
+	  //  new DiffGraph(g2, "/tmp/lalr").createPNGs().createMP4(1);
 
 	    Graph.isLALR = false;
 
-	    new DiffGraph(g2, "/tmp/lr").createMP4(1);
+	   // new DiffGraph(g2, "/tmp/lr").createMP4(1);
 
 	    //new SimpleCalculator4();
 	    /*

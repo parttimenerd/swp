@@ -1,13 +1,22 @@
 package swp.grammar;
 
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.Stack;
+import java.util.function.Function;
+
 import swp.lexer.TerminalSet;
 import swp.parser.lr.BaseAST;
 import swp.parser.lr.ListAST;
 import swp.util.SerializableFunction;
-
-import java.io.Serializable;
-import java.util.*;
-import java.util.function.Function;
 
 import static swp.util.Utils.join;
 
@@ -191,7 +200,7 @@ public class Grammar implements Serializable {
 	}
 
 	/**
-	 * Reduce the passed production with the passed child asts
+	 * Reduce the passed production with the passed expression asts
 	 *
 	 * @param productionId id of the production
 	 * @param asts passed asts
@@ -201,8 +210,8 @@ public class Grammar implements Serializable {
 		if (!reduceActions.containsKey(productionId)) {
 			/*List<BaseAST> flattenedASTs = new ArrayList<>();
 			for (BaseAST ast : asts){
-				for (BaseAST child : ast.children()){
-					if (child instanceof ListAST )
+				for (BaseAST expression : ast.children()){
+					if (expression instanceof ListAST )
 					flattenedASTs.add(new ASTLeaf(token));
 				}
 			}
@@ -885,5 +894,45 @@ public class Grammar implements Serializable {
 			}
 		}
 		throw new Error("No such non terminal " + name);
+	}
+
+	/**
+	 * Takes rules like A → B in to account.
+	 * @return map that contains non terminals that derive to a single production
+	 */
+	public Map<NonTerminal, Set<Production>> calculateSingleProductionNonTerminals(){
+		Map<NonTerminal, Set<Production>> ret = new HashMap<>();
+		Map<Production, Set<NonTerminal>> nonTermSetMap = new HashMap<>();
+		for (Production production : productions) {
+			nonTermSetMap.put(production, new HashSet<>());
+		}
+		for (NonTerminal nonTerminal : nonTerminals) {
+			ret.put(nonTerminal, new HashSet<>());
+		}
+		for (NonTerminal nonTerminal : nonTerminals) {
+			if (nonTerminal.getProductions().size() == 1){
+				nonTermSetMap.get(nonTerminal.getProductions().get(0)).add(nonTerminal);
+				ret.get(nonTerminal).add(nonTerminal.getProductions().get(0));
+			}
+		}
+		boolean somethingChanged = true;
+
+		while (somethingChanged){
+			somethingChanged = false;
+			for (NonTerminal lhs : nonTerminals) {
+				Set<NonTerminal> intersectionOfAllProds = new HashSet<>();
+				intersectionOfAllProds.addAll(productions.get(0).nonTerminals);
+				for (Production production : lhs.getProductions()) {
+					intersectionOfAllProds.retainAll(production.nonTerminals);
+				}
+				Set<Production> toAdd = new HashSet<>();
+				for (NonTerminal rhs : intersectionOfAllProds) {
+					toAdd.addAll(ret.get(rhs));
+				}
+				somethingChanged = ret.get(lhs).addAll(toAdd) || somethingChanged;
+			}
+		}
+
+		return ret;
 	}
 }

@@ -1,13 +1,17 @@
 package swp.util;
 
-import swp.SWPException;
-import swp.lexer.Lexer;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import swp.SWPException;
+import swp.lexer.Lexer;
 
 /**
  * Class with utility methods...
@@ -366,5 +370,9 @@ public class Utils {
 			}
 		}
 		return ret;
+	}
+
+	public static <T> String toString(String joiner, List<T> objs){
+		return objs.stream().map(Object::toString).collect(Collectors.joining(joiner));
 	}
 }

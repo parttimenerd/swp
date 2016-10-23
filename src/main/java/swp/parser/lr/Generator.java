@@ -1,5 +1,19 @@
 package swp.parser.lr;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Function;
+
 import swp.Config;
 import swp.SWPException;
 import swp.grammar.ExtGrammarBuilder;
@@ -10,13 +24,6 @@ import swp.lexer.automata.LexerDescriptionParser;
 import swp.lexer.automata.Table;
 import swp.util.Cache;
 import swp.util.Pair;
-
-import java.io.*;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 public class Generator {
 

@@ -1,15 +1,5 @@
 package swp.lexer.automata;
 
-import swp.SWPException;
-import swp.grammar.Grammar;
-import swp.grammar.GrammarBuilder;
-import swp.lexer.Lexer;
-import swp.lexer.Token;
-import swp.parser.lr.*;
-import swp.util.Pair;
-import swp.util.SerializableFunction;
-import swp.util.Utils;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -19,6 +9,21 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.IntStream;
+
+import swp.SWPException;
+import swp.grammar.Grammar;
+import swp.grammar.GrammarBuilder;
+import swp.lexer.Lexer;
+import swp.lexer.Token;
+import swp.parser.lr.BaseAST;
+import swp.parser.lr.CustomAST;
+import swp.parser.lr.Graph;
+import swp.parser.lr.LRParser;
+import swp.parser.lr.LRParserTable;
+import swp.parser.lr.ListAST;
+import swp.util.Pair;
+import swp.util.SerializableFunction;
+import swp.util.Utils;
 
 /**
  * Parser for a lexer description.
@@ -59,7 +64,7 @@ public class LexerDescriptionParser {
 		a.addTerminal("ESCAPED", ms-> ms.use("$escaped"));
 		a.addMacro("$range_char", ms -> ms.use("$escaped").or(ms.create('0', 'Z')).or(ms.create('a', 'z'))
 				.or('_', '+', '/', '.', '(', ')', '<', '>', '=', '?', '\'', '|', '{', '}', '~', '!', '"',
-						'$', '%', '&', '`', '/', ':', ';', '#', ','));
+						'$', '%', '&', '`', '/', ':', ';', '#', ',', '*'));
 		a.addTerminal("CHAR", ms -> ms.create('a', 'z')
 				.or('_', '/', '<', '>', '\'', '~', '!', '"',
 						'$', '%', '&', '`', '/', ':', ','));

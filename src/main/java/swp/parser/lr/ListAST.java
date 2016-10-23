@@ -1,12 +1,19 @@
 package swp.parser.lr;
 
-import swp.lexer.Token;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.RandomAccess;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
+
+import swp.lexer.Token;
 
 /**
  * Created by parttimenerd on 22.07.16.
@@ -235,5 +242,9 @@ public class ListAST<AST extends BaseAST> extends BaseAST implements Collection<
 			tokens.addAll(child.getMatchedTokens());
 		}
 		return tokens;
+	}
+
+	public AST getLast() {
+		return get(size() - 1);
 	}
 }

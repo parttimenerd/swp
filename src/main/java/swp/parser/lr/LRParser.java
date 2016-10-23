@@ -1,13 +1,18 @@
 package swp.parser.lr;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import swp.SWPException;
 import swp.grammar.Grammar;
 import swp.grammar.NonTerminal;
 import swp.lexer.Lexer;
 import swp.lexer.Token;
 import swp.util.Pair;
 import swp.util.Utils;
-
-import java.util.*;
 
 /**
  * Implements an LR(1) parser.
@@ -80,7 +85,14 @@ public class LRParser {
 						stack.remove(stack.size() - 1);
 					}
 					if (!hadError) {
-						astStack.add(grammar.reduce(prodId, reducedASTs));
+						try {
+							astStack.add(grammar.reduce(prodId, reducedASTs));
+						} catch (SWPException ex){
+							String newErrorMsg = String.format("Error around %s: %s", lexer.cur(), ex.getMessage());
+							SWPException newEx = new SWPException(newErrorMsg);
+							newEx.setStackTrace(ex.getStackTrace());
+							throw newEx;
+						}
 					}
 					int newState = currentState();
 					stack.add(new StackFrame(table.gotoTable.get(newState).get(prodInfo.first)));

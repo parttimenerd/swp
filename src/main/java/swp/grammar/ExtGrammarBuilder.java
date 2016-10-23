@@ -1,21 +1,28 @@
 package swp.grammar;
 
-import swp.SWPException;
-import swp.lexer.Lexer;
-import swp.lexer.TerminalSet;
-import swp.lexer.automata.AutomatonLexer;
-import swp.lexer.automata.LexerDescriptionParser;
-import swp.lexer.automata.Table;
-import swp.parser.lr.*;
-import swp.util.Pair;
-import swp.util.SerializableBiFunction;
-import swp.util.SerializableFunction;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
 import java.util.function.Consumer;
+
+import swp.SWPException;
+import swp.lexer.Lexer;
+import swp.lexer.TerminalSet;
+import swp.lexer.Token;
+import swp.lexer.automata.AutomatonLexer;
+import swp.lexer.automata.LexerDescriptionParser;
+import swp.lexer.automata.Table;
+import swp.parser.lr.BaseAST;
+import swp.parser.lr.Graph;
+import swp.parser.lr.LRParser;
+import swp.parser.lr.LRParserTable;
+import swp.parser.lr.ListAST;
+import swp.util.Pair;
+import swp.util.SerializableBiFunction;
+import swp.util.SerializableFunction;
 
 /**
  * Allows parsing of grammar right hand sides (written in a variant of EBNF):
@@ -57,14 +64,13 @@ public class ExtGrammarBuilder extends GrammarBuilder implements Serializable {
 						list -> list.get(0)
 				),
 				new Pair<Object[], SerializableFunction<ListAST, BaseAST>>(b.combine(""),
-						list -> new ObjectsASTNode(new Object[]{""})
+						list -> new ASTNode()
 				)
 		));
 
 		b.add("expression", b.orWithActions(
 				new Pair<Object[], SerializableFunction<ListAST, BaseAST>>(b.combine("expr", "OR", "expression"),
-						list -> new ObjectsASTNode(or(((ObjectsASTNode)list.get(0)).value,
-								((ObjectsASTNode)list.get(2)).value))
+						list -> new OrNode((ASTNode) list.get(0), (ASTNode) list.get(2))
 				),
 				new Pair<Object[], SerializableFunction<ListAST, BaseAST>>(b.combine("expr"),
 						list -> list.get(0)
@@ -73,19 +79,16 @@ public class ExtGrammarBuilder extends GrammarBuilder implements Serializable {
 
 		b.add("expr", b.orWithActions(
 				new Pair<Object[], SerializableFunction<ListAST, BaseAST>>(new Object[]{"expr", "expression"},
-						list -> {
-							return new ObjectsASTNode(combine(((ObjectsASTNode)list.get(0)).value,
-									((ObjectsASTNode)list.get(1)).value));
-						}
+						list -> new CombineNode((ASTNode) list.get(0), (ASTNode) list.get(1))
 				),
 				new Pair<Object[], SerializableFunction<ListAST, BaseAST>>(b.combine("term", "STAR"),
-						list -> new ObjectsASTNode(star(((ObjectsASTNode)list.get(0)).value))
+						list -> new RangeNode((ASTNode)list.get(0), 0, 0, true)
 				),
 				new Pair<Object[], SerializableFunction<ListAST, BaseAST>>(b.combine("term", "MAYBE"),
-						list -> new ObjectsASTNode(maybe(((ObjectsASTNode)list.get(0)).value))
+						list -> new RangeNode((ASTNode)list.get(0), 0, 1, false)
 				),
 				new Pair<Object[], SerializableFunction<ListAST, BaseAST>>(b.combine("term", "PLUS"),
-						list -> new ObjectsASTNode(minimal(1, ((ObjectsASTNode)list.get(0)).value))
+						list -> new RangeNode((ASTNode)list.get(0), 1, 0, true)
 				),
 				new Pair<Object[], SerializableFunction<ListAST, BaseAST>>(b.combine("term"),
 						list -> list.get(0)
@@ -94,7 +97,7 @@ public class ExtGrammarBuilder extends GrammarBuilder implements Serializable {
 
 		b.add("term", b.orWithActions(
 				new Pair<Object[], SerializableFunction<ListAST, BaseAST>>(b.combine("ID"),
-						list -> new ObjectsASTNode(combine(list.getMatchedString()))
+						list -> new IDNode(list.getMatchedString())
 				),
 				new Pair<Object[], SerializableFunction<ListAST, BaseAST>>(b.combine("TOKEN_ID"),
 						list -> {
@@ -103,7 +106,7 @@ public class ExtGrammarBuilder extends GrammarBuilder implements Serializable {
 								throw new SWPException(String.format("No such token %s in grammar description",
 										tokenName));
 							}
-							return new ObjectsASTNode(combine(tokenName));
+							return new TokenNode(alphabet.stringToType(tokenName));
 						}
 				),
 				new Pair<Object[], SerializableFunction<ListAST, BaseAST>>(
@@ -116,6 +119,7 @@ public class ExtGrammarBuilder extends GrammarBuilder implements Serializable {
 		basicParserTable = Graph.createFromGrammar(grammar).toParserTable();
 		//Utils.repl(input -> createLexer(input));
 		//new DiffGraph(grammar, "/tmp/test_").createMP4(1);
+		//Utils.parserRepl(s -> addRule("A", s));
 	}
 
 	/**
@@ -129,11 +133,25 @@ public class ExtGrammarBuilder extends GrammarBuilder implements Serializable {
 		//System.out.println(nonTerminal + " → " + rule);
 		Lexer lex = createLexer(rule);
 		//Utils.repl(this::createLexer);
-		LRParser parser = new LRParser(basicParserTable.grammar, lex, basicParserTable);
-		Object[] rhs = ((ObjectsASTNode)parser.parse()).value;
-		add(nonTerminal, rhs);
+		try {
+			LRParser parser = new LRParser(basicParserTable.grammar, lex, basicParserTable);
+			Object[] rhs = ((ASTNode) parser.parse()).toObjectArr(this);
+			add(nonTerminal, rhs);
+		} catch (Exception ex){
+			System.err.println(String.format("Error at rule %s → %s", nonTerminal, rule));
+			throw ex;
+		}
 		return this;
 	}
+
+	public ExtGrammarBuilder addEitherRule(String nonTerminal, String... subNonTerminals){
+		//System.out.println(nonTerminal + " → " + rule);
+		for (String rule : subNonTerminals){
+			addRule(nonTerminal, rule).action(asts -> asts.get(0));
+		}
+		return this;
+	}
+
 
 	/**
 	 * Add a rule with an action
@@ -601,15 +619,101 @@ public class ExtGrammarBuilder extends GrammarBuilder implements Serializable {
 		}
 	}
 
-	private class ObjectsASTNode extends CustomAST<Object[]> {
+	public static class ASTNode extends BaseAST {
 
-		public ObjectsASTNode(Object[] value) {
-			super(value);
+		public Object[] toObjectArr(GrammarBuilder builder){
+			return new Object[]{""};
 		}
 
 		@Override
-		public String type() {
-			return "objects";
+		public List<Token> getMatchedTokens() {
+			return null;
+		}
+	}
+
+	public static class BinaryASTNode extends ASTNode {
+		public final ASTNode left;
+		public final ASTNode right;
+
+		public BinaryASTNode(ASTNode left, ASTNode right){
+			this.left = left;
+			this.right = right;
+		}
+	}
+
+	public static class OrNode extends BinaryASTNode {
+
+		public OrNode(ASTNode left, ASTNode right) {
+			super(left, right);
+		}
+
+		@Override
+		public Object[] toObjectArr(GrammarBuilder builder) {
+			return builder.or(left.toObjectArr(builder), right.toObjectArr(builder));
+		}
+	}
+
+	public static class CombineNode extends BinaryASTNode {
+
+		public CombineNode(ASTNode left, ASTNode right) {
+			super(left, right);
+		}
+
+		@Override
+		public Object[] toObjectArr(GrammarBuilder builder) {
+			return builder.combine(left.toObjectArr(builder), right.toObjectArr(builder));
+		}
+	}
+
+	public static class RangeNode extends ASTNode {
+		public final ASTNode child;
+		public final int start;
+		public final int end;
+		public final boolean infEnd;
+
+		public RangeNode(ASTNode child, int start, int end, boolean infEnd) {
+			this.child = child;
+			this.start = start;
+			this.end = end;
+			this.infEnd = infEnd;
+		}
+
+		@Override
+		public Object[] toObjectArr(GrammarBuilder builder) {
+			if (infEnd){
+				return builder.minimal(start, child.toObjectArr(builder));
+			} else {
+				if (start == 0 && end == 1){
+					return builder.maybe(child.toObjectArr(builder));
+				}
+				throw new NotImplementedException();
+			}
+		}
+	}
+
+	public static class IDNode extends ASTNode {
+		public final String id;
+
+		public IDNode(String id) {
+			this.id = id;
+		}
+
+		@Override
+		public Object[] toObjectArr(GrammarBuilder builder) {
+			return builder.combine(id);
+		}
+	}
+
+	public static class TokenNode extends ASTNode {
+		public final int tokenID;
+
+		public TokenNode(int tokenID){
+			this.tokenID = tokenID;
+		}
+
+		@Override
+		public Object[] toObjectArr(GrammarBuilder builder) {
+			return builder.combine(tokenID);
 		}
 	}
 }

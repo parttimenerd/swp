@@ -1,6 +1,7 @@
 package swp.parser.examples;
 
 import swp.grammar.ExtGrammarBuilder;
+import swp.grammar.random.SentenceGenerator;
 import swp.parser.lr.Generator;
 import swp.util.Utils;
 
@@ -68,7 +69,7 @@ public class Fui {
 	}
 
 	public static void main(String[] args) {
-		Generator generator = Generator.getCachedIfPossible("fui", LexerTerminal.class, new String[]{"WS", "COMMENT"},
+		Generator generator = Generator.getCachedIfPossible(null, LexerTerminal.class, new String[]{"WS", "COMMENT"},
 				(builder) -> {
 			builder.addRule("program", "block")
 					.addRule("program", "")
@@ -127,7 +128,10 @@ public class Fui {
 							.addRule("returnresult", "");
 
 
-		}, "program");
+		}, "program", grammar -> {
+					SentenceGenerator gen = new SentenceGenerator(grammar);
+					System.out.println(gen.generateRandomSentence());
+				});
 		//Utils.repl(s -> generator.createLexer(s));
 		Utils.parserRepl(s -> generator.parse(s).toPrettyString());
 	}
