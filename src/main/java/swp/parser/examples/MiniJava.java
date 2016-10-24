@@ -1,5 +1,12 @@
 package swp.parser.examples;
 
+import swp.SWPException;
+import swp.lexer.Token;
+import swp.parser.lr.BaseAST;
+import swp.parser.lr.Generator;
+import swp.parser.lr.ListAST;
+import swp.util.Utils;
+
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -9,28 +16,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import swp.SWPException;
-import swp.lexer.Token;
-import swp.parser.lr.BaseAST;
-import swp.parser.lr.Generator;
-import swp.parser.lr.ListAST;
-import swp.util.Utils;
-
-import static swp.parser.examples.MiniJava.LexerTerminal.AND;
-import static swp.parser.examples.MiniJava.LexerTerminal.DIVIDE;
-import static swp.parser.examples.MiniJava.LexerTerminal.EQUALS;
-import static swp.parser.examples.MiniJava.LexerTerminal.EQUAL_SIGN;
-import static swp.parser.examples.MiniJava.LexerTerminal.GREATER;
-import static swp.parser.examples.MiniJava.LexerTerminal.GREATER_EQUALS;
-import static swp.parser.examples.MiniJava.LexerTerminal.INVERT;
-import static swp.parser.examples.MiniJava.LexerTerminal.LOWER;
-import static swp.parser.examples.MiniJava.LexerTerminal.LOWER_EQUALS;
-import static swp.parser.examples.MiniJava.LexerTerminal.MINUS;
-import static swp.parser.examples.MiniJava.LexerTerminal.MODULO;
-import static swp.parser.examples.MiniJava.LexerTerminal.MULTIPLY;
-import static swp.parser.examples.MiniJava.LexerTerminal.OR;
-import static swp.parser.examples.MiniJava.LexerTerminal.PLUS;
-import static swp.parser.examples.MiniJava.LexerTerminal.UNEQUALS;
+import static swp.parser.examples.MiniJava.LexerTerminal.*;
 
 /**
  * Code for the MiniJava language, see
@@ -178,6 +164,10 @@ public class MiniJava {
                             return new FieldNode((TypeNode)asts.get(1), asts.get(2).getMatchedString());
                         })
                         .addRule("main_method", "PUBLIC STATIC VOID IDENT LPAREN STRING LRBRACKET IDENT RPAREN block", asts -> {
+                            String name = asts.get(3).getMatchedString();
+                            if (!name.equals("main")){
+                                throw new MJError("Static methods besides \"main\" aren't alowed.");
+                            }
                             return new MainMethodNode((BlockNode)asts.getLast());
                         })
                         .addRule("method", "PUBLIC type IDENT LPAREN parameters RPAREN block", asts -> {
@@ -406,6 +396,9 @@ public class MiniJava {
             out.println("template<typename T> void $println(T *o){std::cout << o->value << \"\\n\";}");
             out.println("$$Int* operator-(const $$Int& in){ return new $$Int(-in.value); }");
             out.println("bool operator!(const $$Boolean& in){ return !in.value; }");
+            out.println("$$Int* $$copy($$Int *o){ return new $$Int(o->value); }");
+            out.println("$$Boolean* $$copy($$Boolean *o){ return new $$Boolean(o->value); }");
+            out.println("template<typename T> T* $$copy(T *o){ return o; }");
             //out.println("void $print($$Int *o){printf(\"H\");printf(\"%d\",o->value);}");
             //out.println("void $print($$Boolean *o){std::cout << o->value;}");
 
@@ -1084,7 +1077,7 @@ public class MiniJava {
             builder.append(ws(identation)).append(type.cpp()).append(" ").append(name);
             String initExpr = null;
             if (hasInitExpression()){
-                initExpr = initExpression.cpp();
+                initExpr = String.format("$$copy(%s)", initExpression.cpp());
             } /*else {
                 switch (type.typeName()){
                     case "int":
@@ -1345,13 +1338,16 @@ public class MiniJava {
             if (Arrays.asList(new String[]{"+", "-", "/", "*", "%"}).contains(operator.representation)){
                 return String.format("(*(%s) %s *(%s))", left.cpp(), operator.representation, right.cpp());
             }
-            if (operator.representation == "||" || operator.representation == "&&"){
+            if (operator == AND || operator == OR){
                 return String.format("(new $$Boolean($$bool(%s) %s $$bool(%s)))",
                         left.cpp(), operator.representation, right.cpp());
             }
             if (Arrays.asList(new String[]{"<", "<=", ">", ">=", "==", "!="}).contains(operator.representation)){
                 return String.format("(new $$Boolean(*(%s) %s *(%s)))",
                         left.cpp(), operator.representation, right.cpp());
+            }
+            if (operator == EQUAL_SIGN){
+                return String.format("[&](){%s = $$copy(%s); return %s; }()", left.cpp(), right.cpp(), left.cpp());
             }
             return String.join(" ", left.cpp(), operator.representation, right.cpp());
         }

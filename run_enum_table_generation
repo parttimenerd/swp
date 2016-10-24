@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+
+case "$(uname -s)" in
+   Darwin)
+     SCRIPT_PATH=$(greadlink -f "$0")
+     ;;
+
+   *)
+     SCRIPT_PATH=$(readlink -f "$0")
+     ;;
+esac
+
+PROJECT_DIR=$(dirname "$SCRIPT_PATH")
+
+java -classpath "$PROJECT_DIR/target/classes/" swp.lexer.automata.EnumTableGenerator $@

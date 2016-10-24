@@ -1,10 +1,14 @@
 package swp.lexer.automata;
 
-import swp.util.Utils;
 import swp.lexer.TerminalSet;
+import swp.util.Utils;
 
+import java.io.IOException;
 import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A lexer state transition table
@@ -139,5 +143,34 @@ public class Table implements Serializable {
 		public String toString() {
 			return String.format("[id=%3d %3d %3d %3d %3d %3d]", terminalRowIndex, activeStates, startState, endState, product, sum);
 		}
+	}
+
+	public String toTableClass(Path templateFile, String packageName, String className) throws IOException {
+		List<String> finalTypesStrings = new ArrayList<>();
+		for (int finalType : finalTypes) {
+			finalTypesStrings.add(String.format("            %d", finalType));
+		}
+		String finalTypesString = String.join(",\n", finalTypesStrings) + "\n";
+		List<String> colStrings = new ArrayList<>();
+		for (int i = 0; i < transitions.length; i++){
+			int[] col = transitions[i];
+			List<String> rowStrings = new ArrayList<>();
+			for (int j = 0; j < col.length; j++) {
+				rowStrings.add(String.format("                    %d", col[j]));
+			}
+			String rowString = String.join(",\n", rowStrings) + "\n";
+			String templ = "            new int[]{\n" +
+					rowString +
+					"            }";
+			colStrings.add(templ);
+		}
+		String transitionsString = String.join(",\n", colStrings) + "\n";
+		String template = new String(Files.readAllBytes(templateFile));
+		template = template.replace("package[^;];", String.format("package %s;", packageName))
+				.replace("class [^{]{", String.format("class %s {", className))
+				.replace("initialState = 1", String.format("initialState = %d", initialState))
+				.replace("1\n", finalTypesString)
+				.replace("new int[]{}", transitionsString);
+		return template.replace("\t", "    ");
 	}
 }
