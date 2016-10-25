@@ -75,10 +75,9 @@ public class EnumTableGenerator {
         String enumInits = descriptions.stream().map(descr -> {
             return String.format("    %s(%s)", descr.name, Utils.toPrintableRepresentation(descr.description));
         }).collect(Collectors.joining(",\n"));
-
         String template = new String(Files.readAllBytes(enumTemplate));
-        template = template.replace("package[^;];", String.format("package %s;", packageName))
-                .replace("class [^{]{", String.format("class %s {", enumClassName))
+        template = template.replaceAll("package[^;]+;", String.format("package %s;", packageName))
+                .replaceAll("EnumTemplate", enumClassName)
                 .replace("    EOF(\"eof\")", enumInits);
         Files.write(enumOutputFile, template.replaceAll("\t", "    ").getBytes());
     }

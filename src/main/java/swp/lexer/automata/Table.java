@@ -166,8 +166,8 @@ public class Table implements Serializable {
 		}
 		String transitionsString = String.join(",\n", colStrings) + "\n";
 		String template = new String(Files.readAllBytes(templateFile));
-		template = template.replace("package[^;];", String.format("package %s;", packageName))
-				.replace("class [^{]{", String.format("class %s {", className))
+		template = template.replaceAll("package[^;]+;", String.format("package %s;", packageName))
+				.replaceFirst("class [^{\\s]+", String.format("class %s", className))
 				.replace("initialState = 1", String.format("initialState = %d", initialState))
 				.replace("1\n", finalTypesString)
 				.replace("new int[]{}", transitionsString);
