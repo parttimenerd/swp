@@ -15,10 +15,10 @@ public class TableTemplate {
             new int[]{}
     };
     /**
-     * [state] => -1: non final state, else terminal id
+     * [state] => null: non final state, else terminal
      */
-    private final int[] finalTypes = new int[]{
-            1
+    private final EnumTemplate[] finalTerminals = new EnumTemplate[]{
+            null
     };
 
     private final int initialState = 1;
@@ -33,13 +33,5 @@ public class TableTemplate {
 
     public boolean hasStateTransition(int oldState, int input) throws ArrayIndexOutOfBoundsException {
         return transitions[oldState][input] != -1;
-    }
-
-    public int getFinalTerminalId(int state){
-        return finalTypes[state];
-    }
-
-    public boolean isFinalState(int state){
-        return finalTypes[state] != -1;
     }
 }

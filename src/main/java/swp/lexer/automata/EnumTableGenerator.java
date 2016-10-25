@@ -53,11 +53,11 @@ public class EnumTableGenerator {
                 descrs.add(new TerminalDescription(parts[0], parts[1], "", true));
             }
         }
-        createTableFile(descrs, packageName, tableClassName, tableTemplate, tableOutput);
+        createTableFile(descrs, packageName, enumClassName, tableClassName, tableTemplate, tableOutput);
         createEnumFile(descrs, packageName, enumClassName, enumTemplate, enumOutput);
     }
 
-    private static void createTableFile(List<TerminalDescription> descriptions, String packageName,
+    private static void createTableFile(List<TerminalDescription> descriptions, String packageName, String enumClassName,
                                         String tableClassName, Path tableTemplate, Path tableOutput) throws IOException {
         LexerDescriptionParser parser = new LexerDescriptionParser();
         List<Pair<String, String>> pairs = new ArrayList<>();
@@ -67,7 +67,8 @@ public class EnumTableGenerator {
             }
         }
         Table table = parser.eval(pairs, false);
-        Files.write(tableOutput, table.toTableClass(tableTemplate, packageName, tableClassName).getBytes());
+        Files.write(tableOutput, table.toTableClass(descriptions, enumClassName,
+                tableTemplate, packageName, tableClassName).getBytes());
     }
 
     private static void createEnumFile(List<TerminalDescription> descriptions, String packageName,
@@ -82,7 +83,7 @@ public class EnumTableGenerator {
         Files.write(enumOutputFile, template.replaceAll("\t", "    ").getBytes());
     }
 
-    private static class TerminalDescription {
+    public static class TerminalDescription {
         public final String name;
         public final String description;
         public final String regexp;
