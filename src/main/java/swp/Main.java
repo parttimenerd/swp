@@ -4,6 +4,7 @@ import swp.grammar.Grammar;
 import swp.grammar.GrammarBuilder;
 import swp.grammar.random.SentenceGenerator;
 import swp.lexer.alphabet.AlphabetTerminals;
+import swp.parser.lr.DiffGraph;
 import swp.parser.lr.Graph;
 
 public class Main {
@@ -11,19 +12,16 @@ public class Main {
     public static void main(String[] args) {
 	    //AlphabetLexer.repl();
 
-	    /*GrammarBuilder builder = new GrammarBuilder(AlphabetTerminals.getInstance());
-	    builder.add("AB", '(')
-			    //.add("AB", "")
-			    .add("AB", "BB", "BB")
-			    .add("BB", '4');
-			    //.add("BB", "AB", '4', "BB");
-
-	    Grammar g2 = builder.toGrammar("AB");
-
-	    new DiffGraph(g2, "/tmp/abc").createMP4(1);
-*/
-
 	    GrammarBuilder builder = new GrammarBuilder(AlphabetTerminals.getInstance());
+		builder.add("AA", '(', "AA", ')')
+				.add("AA", 'c');
+
+
+	    Grammar g2 = builder.toGrammar("AA");
+
+	    new DiffGraph(g2, "/tmp/abc").createGIF(1);
+
+	   /* GrammarBuilder builder = new GrammarBuilder(AlphabetTerminals.getInstance());
 	    builder.add("AB", '(', "AB", ')')
 			    .add("AB", "BB")
 			    .add("BB", "AB", '4', "BB")
@@ -33,7 +31,7 @@ public class Main {
 	    System.out.println(g2.calculateSingleProductionNonTerminals());
 	    SentenceGenerator gen2 = new SentenceGenerator(g2);
 	    while (1 == Math.abs(1)) System.out.println(gen2.generateRandomSentence());
-
+*/
 	    GrammarBuilder builder2 = new GrammarBuilder(AlphabetTerminals.getInstance());
 	    builder2.add("AB", '(', "BB", ')')
 	            .add("BB", "BB", "BB")

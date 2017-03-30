@@ -16,4 +16,14 @@ Features
 * Basic generation of Early and LL(1) parsers
 * It has zero dependencies and is written in Java 8 style code
 
+Example GIF
+-----------
+The following gif is a construction GIF for the LARL automaton of the grammar
+`AA → ( AA ), AA → c`:
+ 
+![Automaton construction GIF](img/example.gif)
+
+
+
+
 It's licensed under the GPLv3 license.
