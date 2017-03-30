@@ -67,6 +67,9 @@ public class EnumTableGenerator {
             }
         }
         Table table = parser.eval(pairs, false);
+        Automaton automaton = parser.automaton.toDeterministicVersion();
+        automaton.toImage("test", "svg");
+        table = automaton.toTable();
         Files.write(tableOutput, table.toTableClass(descriptions, enumClassName,
                 tableTemplate, packageName, tableClassName).getBytes());
     }

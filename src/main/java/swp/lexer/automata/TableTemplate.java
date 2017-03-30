@@ -20,6 +20,10 @@ public class TableTemplate {
     private final EnumTemplate[] finalTerminals = new EnumTemplate[]{
             null
     };
+    public final int[] tokenTypeTranslations = new int[0];
+    public final int[][] reverseTranslations = new int[][]{
+            new int[]{1}
+    };
 
     private final int initialState = 1;
 

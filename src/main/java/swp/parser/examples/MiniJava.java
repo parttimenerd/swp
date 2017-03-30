@@ -59,30 +59,12 @@ public class MiniJava {
                         "static)|(strictfp)|(super)|(switch)|(synchronized)|(throws)|(throw)|(" +
                         "transient)|(try)|(void)|(volatile)"),
 
-        MULTIPLY_EQUALS("\\*="),
-        INCREMENT("\\+\\+"),
-        PLUS_EQUALS("\\+="),
-        MINUS_EQUALS("\\-="),
-        DECREMENT("\\-\\-"),
-        DIVIDE_EQUALS("/="),
-        LOWER_LOWER_EQUALS("<<="),
-        LOWER_LOWER("<<"),
         LOWER_EQUALS("<="),
         GREATER_EQUALS(">="),
-        GREATER_GREATER_EQUALS(">>="),
-        GREATER_GREATER_GREATER_EQUALS(">>>="),
-        GREATER_GREATER_GREATER(">>>"),
-        GREATER_GREATER(">>"),
-        MODULO_EQUALS("%="),
         MODULO("%"),
-        AND_EQUALS("&="),
-        BIT_WISE_END("&"),
         LBRACKET("\\["),
         RBRACKET("\\]"),
         LRBRACKET("\\[ ([\\r\\n\\t\\s]? (/\\*([^*]*(\\*[^/])?)*\\*/)?)* \\]"),
-        XOR("\\^", "^"),
-        BIT_WISE_NOT("~"),
-        BIT_WISE_OR("|"),
 
         PLUS("\\+", "+"),
         MINUS("\\-", "-"),
@@ -106,7 +88,10 @@ public class MiniJava {
         RCURLY("\\}"),
         COLON(":"),
         COMMA("[,]"),
-        DOT("\\.");
+        DOT("\\."),
+
+        RESERVED_OPERATORS("(\\*=)|(\\+\\+)|(\\+=)|(\\-=)|(\\-\\-)|(/=)|(<<=)|(<<)|(>>=)|(>>>=)|(>>>)|(>>)|(%=)" +
+                "|(&=)|(&)|(~)|(\\|)");
 
         private String description;
         private String representation;
@@ -320,6 +305,9 @@ public class MiniJava {
             }, "program");
 
     public static void main(String[] args) {
+        for (LexerTerminal terminal : LexerTerminal.values()) {
+            System.out.println(terminal.name() + "#" + terminal.representation + "#" + terminal.description);
+        }
         Generator generator = new MiniJava().generator;
         //Utils.repl(s -> generator.createLexer(s));
         Utils.parserRepl(s -> {

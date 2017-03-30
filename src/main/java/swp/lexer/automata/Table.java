@@ -8,7 +8,6 @@ import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -155,22 +154,21 @@ public class Table implements Serializable {
 			if (finalType == -1){
 				finalTypesStrings.add("            null");
 			} else {
-				finalTypesStrings.add(String.format("            %s.%s", enumClassName,
-						descriptions.get(finalType == 0 ? 0 : finalType - 1).name));
+				finalTypesStrings.add(String.format("            %s.%s /* %d, %d */", enumClassName,
+						descriptions.get(finalType == 0 ? 0 : finalType - 1).name, finalType, i));
 			}
 		}
 		String finalTypesString = String.join(",\n", finalTypesStrings) + "\n";
 		List<String> colStrings = new ArrayList<>();
-		System.out.println(Arrays.toString(finalTypes));
 		for (int i = 0; i < transitions.length; i++){
 			int[] col = transitions[i];
 			List<String> rowStrings = new ArrayList<>();
 			for (int j = 0; j < col.length; j++) {
-				rowStrings.add(String.format("                    %d", col[j]));
+				rowStrings.add(String.format("%d", col[j]));
 			}
-			String rowString = String.join(",\n", rowStrings) + "\n";
+			String rowString = String.join(", ", rowStrings) + "\n";
 			String templ = "            new int[]{\n" +
-					rowString +
+					"                    " + rowString +
 					"            }";
 			colStrings.add(templ);
 		}

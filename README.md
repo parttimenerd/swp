@@ -12,7 +12,7 @@ Features
 * Create lexers (and their automaton table) using an regular expression like syntax
 * Create LR and LARL parsers:
     * create GIFs and MP4 of the construction of their automatons
-    * use them to parse real grammars (the EBNF and regex parsing is implementing this way)
+    * use them to parse real grammars (the EBNF and regex parsing is implemented this way)
 * Basic generation of Early and LL(1) parsers
 * It has zero dependencies and is written in Java 8 style code
 
