@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Created by parttimenerd on 22.07.16.
+ * A basic AST
  */
 public abstract class BaseAST {
 

@@ -1,6 +1,8 @@
 package swp.util;
 
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.stream.Stream;
 
 /**
  * Simple implementation of an immutable pair
@@ -27,5 +29,9 @@ public class Pair<T, V> implements Serializable {
 		}
 		Pair pair = (Pair)obj;
 		return pair.first == this.first && pair.second == this.second;
+	}
+
+	public Stream<T> firstStream(){
+		return Stream.of(first);
 	}
 }

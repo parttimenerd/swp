@@ -1,23 +1,24 @@
 package swp;
 
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import swp.lexer.Lexer;
 import swp.lexer.automata.AutomatonLexer;
 import swp.lexer.automata.LexerDescriptionParser;
 import swp.lexer.automata.Table;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
+import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
 public class LexerDescriptionParserTest {
 
 	static LexerDescriptionParser lexerDescriptionParser = new LexerDescriptionParser();
 
-	@org.junit.Test
+	@Test
 	public void invalidLexerGrammars() throws Exception {
 		String[] invalidGrammars = new String[]{
 				"a", "bc", "A", "A = $a"
@@ -27,7 +28,7 @@ public class LexerDescriptionParserTest {
 		}
 	}
 
-	@org.junit.Test
+	@Test
 	public void validLexerGrammars() throws Exception {
 		String[] validGrammars = new String[]{
 				"A = a"
@@ -37,7 +38,7 @@ public class LexerDescriptionParserTest {
 		}
 	}
 
-	@org.junit.Test
+	@Test
 	public void unlexable() throws Exception {
 		String[] unlexable = new String[]{
 				"A = a", "b",
@@ -50,7 +51,7 @@ public class LexerDescriptionParserTest {
 		}
 	}
 
-	@org.junit.Test
+	@Test
 	public void lexable() throws Exception {
 		checkLexable("A = a", "a", "A");
 		String grammar = "A = (\"[^\\w]*\") | 3";
@@ -99,7 +100,7 @@ public class LexerDescriptionParserTest {
 		//checkLexable(grammar, "\"\"", "A");
 	}
 
-	@org.junit.Test
+	@Test
 	public void lexable2() throws Exception {
 		toImage("A = a{3}", "checkUnlexable");
 		checkUnlexable("A = a{1}{2}", "aaa");

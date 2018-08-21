@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 
 import swp.SWPException;
 import swp.lexer.Lexer;
+import swp.lexer.Location;
 
 /**
  * Class with utility methods...
@@ -301,7 +302,7 @@ public class Utils {
 		String line = "";
 		System.out.print("");
 		try {
-			while ((line = input.readLine()) != null && !line.equals("")){
+			while ((line = input.readLine()) != null && !line.trim().equals("")){
 				Lexer lexer = lexerConstructor.apply(line);
 				System.out.print("=> ");
 				try {
@@ -328,13 +329,15 @@ public class Utils {
 	public static void parserRepl(Function<String, Object> eval){
 		BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
 		String line = "";
-		System.out.print("");
 		try {
 			while (!(line = input.readLine()).equals("")){
 				try {
 					Object result = eval.apply(line);
 					System.out.print("=> " + result);
 					System.out.print("\n");
+				} catch (ParserError parserError){
+					System.err.println(getErrorNeighbourhood(parserError.errorLocation, line, 10));
+					parserError.printStackTrace();
 				} catch (Error ex){
 					ex.printStackTrace();
 				}
@@ -342,6 +345,19 @@ public class Utils {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	/**
+	 * Returns the part of the parsed string that surrounds the error
+	 * @param errorLocation
+	 * @param input
+	 * @param length returns at maximum this number of characters before and after the location
+	 * @return
+	 */
+	static String getErrorNeighbourhood(Location errorLocation, String input, int length){
+		String offendingLine = input.split("\n")[errorLocation.line - 1];
+		String augmentedLine = offendingLine.substring(0, errorLocation.column) + "←" + offendingLine.substring(errorLocation.column);
+		return augmentedLine.substring(Math.max(0, errorLocation.column - length), Math.min(errorLocation.column + length + 1, augmentedLine.length()));
 	}
 
 	/**

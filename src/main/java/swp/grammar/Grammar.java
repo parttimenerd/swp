@@ -169,14 +169,14 @@ public class Grammar implements Serializable {
 		while (!depthFirstStack.isEmpty()){
 			NonTerminal t = depthFirstStack.pop();
 			visited.add(t);
-			for (Production prod : t.getProductions()){
-				reached.addAll(prod.nonTerminals);
-				for (NonTerminal nonTerminal : prod.nonTerminals){
-					if (!visited.contains(nonTerminal)){
-						depthFirstStack.add(nonTerminal);
+				for (Production prod : t.getProductions()) {
+					reached.addAll(prod.nonTerminals);
+					for (NonTerminal nonTerminal : prod.nonTerminals) {
+						if (!visited.contains(nonTerminal)) {
+							depthFirstStack.add(nonTerminal);
+						}
 					}
 				}
-			}
 		}
 		List<Production> filteredProds = new ArrayList<>();
 		for (Production prod : productions){

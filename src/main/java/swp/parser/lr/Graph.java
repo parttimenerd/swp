@@ -50,7 +50,13 @@ public class Graph {
 					Map<Symbol, State> createdStates = currentState.shift();
 					List<Symbol> symbols = new ArrayList<>();
 					symbols.addAll(createdStates.keySet());
-					Collections.sort(symbols);
+					try {
+					//	Collections.sort(symbols);
+					} catch (IllegalArgumentException ex){
+						ex.printStackTrace();
+						System.err.println(symbols);
+						throw ex;
+					}
 					for (Symbol shiftSymbol : symbols){
 						State createdState = createdStates.get(shiftSymbol);
 						boolean merged = false;

@@ -12,6 +12,7 @@ import swp.grammar.NonTerminal;
 import swp.lexer.Lexer;
 import swp.lexer.Token;
 import swp.util.Pair;
+import swp.util.ParserError;
 import swp.util.Utils;
 
 /**
@@ -61,7 +62,7 @@ public class LRParser {
 					hadError = true;
 					System.err.println(errorMsg);
 				} else {
-					throw new Error(errorMsg);
+					throw new ParserError(lexer.cur(), errorMsg);
 				}
 			}
 			LRParserTable.Action action = row.get(tokenId);
@@ -89,7 +90,7 @@ public class LRParser {
 							astStack.add(grammar.reduce(prodId, reducedASTs));
 						} catch (SWPException ex){
 							String newErrorMsg = String.format("Error around %s: %s", lexer.cur(), ex.getMessage());
-							SWPException newEx = new SWPException(newErrorMsg);
+							SWPException newEx = new ParserError(lexer.cur(), newErrorMsg);
 							newEx.setStackTrace(ex.getStackTrace());
 							throw newEx;
 						}
