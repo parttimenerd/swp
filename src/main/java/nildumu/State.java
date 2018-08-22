@@ -3,6 +3,7 @@ package nildumu;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static nildumu.Lattices.*;
@@ -38,5 +39,9 @@ class State {
     @Override
     public String toString() {
         return map.entrySet().stream().map(e -> String.format("%s => %s",e.getKey(), e.getValue().repr())).collect(Collectors.joining("\n"));
+    }
+
+    public Set<String> variableNames(){
+        return map.keySet();
     }
 }

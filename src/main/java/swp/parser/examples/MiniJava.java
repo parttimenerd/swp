@@ -1827,13 +1827,8 @@ public class MiniJava {
         }
 
         @Override
-        protected String toPrettyString(int ident, int total) {
-            StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < total; i++){
-                builder.append("\t");
-            }
-            builder.append(this);
-            return builder.toString();
+        public String toPrettyString(String indent, String incr) {
+            return indent + toString();
         }
     }
 

@@ -4,6 +4,9 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 
 import javax.swing.*;
 
@@ -15,6 +18,7 @@ import edu.uci.ics.jung.algorithms.layout.KKLayout;
 import edu.uci.ics.jung.graph.DirectedGraph;
 import edu.uci.ics.jung.graph.DirectedSparseGraph;
 import edu.uci.ics.jung.graph.util.EdgeType;
+import edu.uci.ics.jung.samples.GraphZoomScrollPaneDemo;
 import edu.uci.ics.jung.visualization.GraphZoomScrollPane;
 import edu.uci.ics.jung.visualization.Layer;
 import edu.uci.ics.jung.visualization.RenderContext;
@@ -32,6 +36,7 @@ import edu.uci.ics.jung.visualization.renderers.BasicVertexLabelRenderer.InsideP
 import edu.uci.ics.jung.visualization.renderers.VertexLabelRenderer;
 import edu.uci.ics.jung.visualization.transform.shape.GraphicsDecorator;
 import nildumu.LeakageCalculation;
+import nildumu.Parser;
 import nildumu.Util;
 
 import static nildumu.LeakageCalculation.*;
@@ -47,6 +52,8 @@ public class JungPanel extends JPanel {
     VisualizationViewer<VisuNode, VisuEdge> vv;
 
     ScalingControl scaler = new CrossoverScalingControl();
+
+    private List<Consumer<VisuNode>> nodeClickedHandler = new ArrayList<>();
 
     public void update(JungGraph jungGraph){
         if (jungGraph.graph == this.graph){
@@ -79,16 +86,20 @@ public class JungPanel extends JPanel {
                             fillPaint = new GradientPaint((float)r.getMinX(), (float)r.getMinY(), Color.white,
                                     (float)r.getMinX(), y2, Color.blue, false);
                         } else {
+                            Color color = Color.black;
+                            if (v.marked()){
+                                color = Color.red;
+                            }
+                            if (v == jungGraph.input || v == jungGraph.output){
+                                color = Color.green;
+                            }
                             fillPaint = new GradientPaint((float)r.getMinX(), (float)r.getMinY(), Color.white,
-                                    (float)r.getMinX(), y2, v.marked() ? Color.red : Color.black, false);
+                                    (float)r.getMinX(), y2, color, false);
                         }
                         g.setPaint(fillPaint);
                         g.fill(shape);
                         g.setPaint(oldPaint);
                         Paint drawPaint = rc.getVertexDrawPaintTransformer().apply(v);
-                        if(drawPaint != null) {
-                            g.setPaint(drawPaint);
-                        }
                         Stroke oldStroke = g.getStroke();
                         Stroke stroke = rc.getVertexStrokeTransformer().apply(v);
                         if(stroke != null) {
@@ -111,6 +122,8 @@ public class JungPanel extends JPanel {
                 super.getVertexLabelRendererComponent(vv, value, font, isSelected, vertex);
                 if (((VisuNode)vertex).marked()) {
                     setForeground(Color.red);
+                } else if (vv == jungGraph.input || vv == jungGraph.output){
+                    setForeground(Color.green);
                 }
                 return this;
             }
@@ -131,11 +144,31 @@ public class JungPanel extends JPanel {
 
         vv.addKeyListener(graphMouse.getModeKeyListener());
         vv.setToolTipText("<html><center>Type 'p' for Pick mode<p>Type 't' for Transform mode");
+        vv.addGraphMouseListener(new GraphMouseListener<VisuNode>() {
+            @Override
+            public void graphClicked(VisuNode visuNode, MouseEvent me) {
+                nodeClickedHandler.forEach(h -> h.accept(visuNode));
+            }
+
+            @Override
+            public void graphPressed(VisuNode visuNode, MouseEvent me) {
+
+            }
+
+            @Override
+            public void graphReleased(VisuNode visuNode, MouseEvent me) {
+
+            }
+        });
 
         this.setLayout(new GridLayout(1, 1));
         this.setBorder(BorderFactory.createLineBorder(Color.blue));
         this.revalidate();
         this.repaint();
+    }
+
+    public void addNodeClickedHandler(Consumer<VisuNode> handler){
+        nodeClickedHandler.add(handler);
     }
 
     public void scale(float factor){

@@ -13,6 +13,7 @@ import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
+import swp.lexer.Location;
 import swp.lexer.Token;
 
 /**
@@ -246,5 +247,15 @@ public class ListAST<AST extends BaseAST> extends BaseAST implements Collection<
 
 	public AST getLast() {
 		return get(size() - 1);
+	}
+
+	public Location getStartLocation(){
+		for (BaseAST child : children){
+			List<Token> tokens = child.getMatchedTokens();
+			if (tokens.size() > 0){
+				return tokens.get(0).location;
+			}
+		}
+		return new Location(0, 0);
 	}
 }

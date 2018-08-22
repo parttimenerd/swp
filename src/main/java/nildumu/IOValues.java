@@ -92,4 +92,8 @@ public class IOValues {
     public Sec<?> getSec(Bit bit){
         return getSec(bit.value());
     }
+
+    public boolean hasBitWithoutValue(){
+        return bits.stream().anyMatch(b -> b.value() == null);
+    }
 }

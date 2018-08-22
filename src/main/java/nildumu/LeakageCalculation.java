@@ -177,6 +177,7 @@ public class LeakageCalculation {
     public static interface VisuNode {
         public String repr();
         public boolean marked();
+        public Parser.MJNode node();
     }
 
     public static class EdgeGraph {
@@ -214,6 +215,11 @@ public class LeakageCalculation {
             @Override
             public String repr() {
                 return bit.repr();
+            }
+
+            @Override
+            public Parser.MJNode node() {
+                return bit.value().node();
             }
         }
 
@@ -397,6 +403,11 @@ public class LeakageCalculation {
             @Override
             public boolean marked() {
                 return inMinCut;
+            }
+
+            @Override
+            public Parser.MJNode node() {
+                return bit.value().node();
             }
         }
 

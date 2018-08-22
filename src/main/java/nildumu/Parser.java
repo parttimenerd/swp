@@ -3,16 +3,14 @@ package nildumu;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import swp.SWPException;
-import swp.grammar.ExtGrammarBuilder;
 import swp.lexer.Lexer;
+import swp.lexer.Location;
 import swp.lexer.Token;
-import swp.parser.lr.ASTLeaf;
 import swp.parser.lr.BaseAST;
 import swp.parser.lr.Generator;
 import swp.parser.lr.ListAST;
 import swp.util.Utils;
 
-import java.beans.Expression;
 import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -39,7 +37,7 @@ public class Parser implements Serializable {
     /**
      * The terminals with the matching regular expression
      */
-    public static enum LexerTerminal implements Generator.LexerTerminalEnum {
+    public enum LexerTerminal implements Generator.LexerTerminalEnum {
         EOF(""),
         COMMENT("/\\*([^*\\n]*(\\*[^/\\n])?)*\\*/"),
         WS("[\\s\\t]"),
@@ -81,7 +79,7 @@ public class Parser implements Serializable {
         RPAREN("\\)"),
         QUESTION_MARK("\\?"),
         SEMICOLON("(\\;|\\n)+"),
-        INTEGER_LITERAL("(([1-9][0-9]*)|0)|(0b[01]+)|(\\-([1-9][0-9]*))|(\\+([1-9][0-9]*))"),
+        INTEGER_LITERAL("(([1-9][0-9]*)|0)|(0b[01]+)|(\\-([1-9][0-9]*))"),
         INPUT_LITERAL("(0b[01u]+)"),
         IDENT("[A-Za-z_][A-Za-z0-9_]*"),
         LCURLY("\\{"),
@@ -123,7 +121,7 @@ public class Parser implements Serializable {
      * Change the id, when changing the parser oder replace the id by {@code null} to build the parser and lexer
      * every time (takes long)
      */
-    static Generator generator = Generator.getCachedIfPossible("blae54i44u7sf2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
+    static Generator generator = Generator.getCachedIfPossible("stuff/blaer54i44u7sf2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
             (builder) -> {
                 builder.addRule("program", "use_sec? lines", asts -> {
                             MJNode.resetIdCounter();
@@ -156,11 +154,11 @@ public class Parser implements Serializable {
                                     return null;
                                 }
                             };
-                            asts.get(1).<WrapperNode<List<MJNode>>>as().wrapped.forEach(n -> ((MJNode)n).accept(visitor));
+                            asts.get(1).<WrapperNode<List<MJNode>>>as().wrapped.forEach(n -> n.accept(visitor));
                             return node;
                         })
                         .addRule("use_sec", "USE_SEC IDENT SEMICOLON", asts -> {
-                            return new WrapperNode<>(SecurityLattice.forName(asts.get(1).getMatchedString()));
+                            return new WrapperNode<>(asts.getStartLocation(), SecurityLattice.forName(asts.get(1).getMatchedString()));
                         })
                         .addRule("lines", "line_w_semi lines", asts -> {
                             WrapperNode<List<MJNode>> left = (WrapperNode<List<MJNode>>) asts.get(1);
@@ -169,10 +167,10 @@ public class Parser implements Serializable {
                             return left;
                         })
                         .addRule("lines", "line", asts -> {
-                            return new WrapperNode<>(new ArrayList<>(Collections.singleton(asts.get(0))));
+                            return new WrapperNode<>(((MJNode)asts.get(0)).location, new ArrayList<>(Collections.singleton(asts.get(0))));
                         })
                         .addRule("lines", "", asts -> {
-                            return new WrapperNode<>(new ArrayList<>());
+                            return new WrapperNode<>(new Location(0, 0), new ArrayList<>());
                         })
                         .addRule("line_w_semi", "method")
                         .addRule("line_w_semi", "block_statement_w_semi")
@@ -184,36 +182,39 @@ public class Parser implements Serializable {
                         .addRule("line", "input_decl_statement")
                         .addRule("output_decl_statement", "IDENT OUTPUT INT IDENT EQUAL_SIGN expression", asts -> {
                             return new OutputVariableDeclarationNode(
+                                    asts.get(0).getMatchedTokens().get(0).location,
                                     asts.get(3).getMatchedString(),
                                     (ExpressionNode)asts.get(5),
                                     asts.get(0).getMatchedString());
                         })
                         .addRule("input_decl_statement", "IDENT INPUT INT IDENT EQUAL_SIGN input_literal", asts -> {
                             return new InputVariableDeclarationNode(
+                                    asts.getStartLocation(),
                                     asts.get(3).getMatchedString(),
                                     (IntegerLiteralNode)asts.get(5),
                                     asts.get(0).getMatchedString());
                         })
                         .addRule("method", "INT IDENT LPAREN parameters RPAREN block", asts -> {
-                            return new MethodNode(asts.get(2).getMatchedString(),
+                            return new MethodNode(asts.get(0).getMatchedTokens().get(0).location,
+                                    asts.get(2).getMatchedString(),
                                     (ParametersNode)asts.get(4), (BlockNode)asts.get(6));
                         })
-                        .addRule("parameters", "", asts -> new ParametersNode(new ArrayList<>()))
+                        .addRule("parameters", "", asts -> new ParametersNode(new Location(0, 0), new ArrayList<>()))
                         .addRule("parameters", "parameter COMMA parameters", asts -> {
-                            ParametersNode node = new ParametersNode(Utils.makeArrayList((ParameterNode)asts.get(0)));
+                            ParametersNode node = new ParametersNode(asts.getStartLocation(), Utils.makeArrayList((ParameterNode)asts.get(0)));
                             node.parameterNodes.addAll(((ParametersNode)asts.get(2)).parameterNodes);
                             return node;
                         })
                         .addRule("parameters", "parameter", asts -> {
-                            return new ParametersNode(Utils.makeArrayList((ParameterNode)asts.get(0)));
+                            return new ParametersNode(asts.getStartLocation(), Utils.makeArrayList((ParameterNode)asts.get(0)));
                         })
                         .addRule("parameter", "INT IDENT", asts -> {
-                            return new ParameterNode(asts.get(1).getMatchedString());
+                            return new ParameterNode(asts.getStartLocation(), asts.get(1).getMatchedString());
                         })
                         .addEitherRule("statement", "block",
                                 "return_statement")
 
-                        .addRule("block", "LCURLY block_statements RCURLY", asts -> new BlockNode(asts.get(1).<WrapperNode<List<StatementNode>>>as().wrapped))
+                        .addRule("block", "LCURLY block_statements RCURLY", asts -> new BlockNode(asts.get(0).getMatchedTokens().get(0).location, asts.get(1).<WrapperNode<List<StatementNode>>>as().wrapped))
                         .addRule("block_statements", "block_statement_w_semi block_statements", asts -> {
                             WrapperNode<List<StatementNode>> left = (WrapperNode<List<StatementNode>>) asts.get(1);
                             StatementNode right = (StatementNode)asts.getAs(0);
@@ -221,10 +222,10 @@ public class Parser implements Serializable {
                             return left;
                         })
                         .addRule("block_statements", "block_statement", asts -> {
-                            return new WrapperNode<>(new ArrayList<>(Collections.singleton(asts.get(0))));
+                            return new WrapperNode<>(((MJNode)asts.get(0)).location, new ArrayList<>(Collections.singleton(asts.get(0))));
                         })
                         .addRule("block_statements", "", asts -> {
-                            return new WrapperNode<>(Collections.emptyList());
+                            return new WrapperNode<>(new Location(0, 0), new ArrayList<>());
                         })
                         .addRule("block_statement_w_semi", "statement SEMICOLON", asts -> asts.get(0))
                         .addRule("block_statement_w_semi", "var_decl SEMICOLON", asts -> asts.get(0))
@@ -238,32 +239,39 @@ public class Parser implements Serializable {
                         .addRule("block_statement", " if_statement")
                         .addRule("var_decl", "INT IDENT", asts -> {
                             return new VariableDeclarationNode(
+                                    asts.getStartLocation(),
                                     asts.get(1).getMatchedString());
                         })
                         .addRule("var_decl", "INT IDENT EQUAL_SIGN expression", asts -> {
                             return new VariableDeclarationNode(
+                                    asts.getStartLocation(),
                                     asts.get(1).getMatchedString(),
                                     (ExpressionNode)asts.get(3));
                         })
                         .addRule("local_variable_assignment_statement", "IDENT EQUAL_SIGN expression", asts -> {
                             return new VariableAssignmentNode(
+                                    asts.getStartLocation(),
                                     asts.get(0).getMatchedString(),
                                     (ExpressionNode)asts.get(2));
                         })
                         .addRule("while_statement", "WHILE LPAREN expression RPAREN block_statement", asts -> {
-                            return new WhileStatementNode((ExpressionNode)asts.get(2),
+                            return new WhileStatementNode(
+                                    asts.getStartLocation(),
+                                    (ExpressionNode)asts.get(2),
                                     (StatementNode)asts.get(4));
                         })
                         .addRule("if_statement", "IF LPAREN expression RPAREN statement", asts -> {
-                            return new IfStatementNode((ExpressionNode)asts.get(2),
+                            return new IfStatementNode(
+                                    asts.getStartLocation(),
+                                    (ExpressionNode)asts.get(2),
                                     (StatementNode)asts.get(4));
                         })
                         .addRule("if_statement", "IF LPAREN expression RPAREN statement ELSE statement", asts -> {
-                            return new IfStatementNode((ExpressionNode)asts.get(2),
+                            return new IfStatementNode(asts.getStartLocation(), (ExpressionNode)asts.get(2),
                                     (StatementNode)asts.get(4), (StatementNode)asts.get(6));
                         })
                         .addRule("return_statement", "RETURN", asts -> {
-                            return new ReturnStatementNode();
+                            return new ReturnStatementNode(asts.getStartLocation());
                         })
                         .addRule("return_statement", "RETURN expression", asts -> {
                             return new ReturnStatementNode((ExpressionNode)asts.get(1));
@@ -290,24 +298,25 @@ public class Parser implements Serializable {
                         .addRule("postfix_expression", "primary_expression")
                         .addEitherRule("postfix_expression", "method_invocation")
                         .addRule("method_invocation", "IDENT LPAREN arguments RPAREN", asts -> {
-                            return new MethodInvocationNode(asts.get(0).getMatchedString(),
+                            return new MethodInvocationNode(asts.getStartLocation(), asts.get(0).getMatchedString(),
                                     (ArgumentsNode)asts.get(2));
                         })
-                        .addRule("arguments", "", asts -> new ArgumentsNode(new ArrayList<>()))
+                        .addRule("arguments", "", asts -> new ArgumentsNode(new Location(0, 0), new ArrayList<>()))
                         .addRule("arguments", "expression", asts -> {
-                            return new ArgumentsNode(Utils.makeArrayList((ExpressionNode)asts.get(0)));
+                            return new ArgumentsNode(((ExpressionNode)asts.get(0)).location, Utils.makeArrayList((ExpressionNode)asts.get(0)));
                         })
                         .addRule("arguments", "expression COMMA expressions", asts -> {
                             List<ExpressionNode> args = Utils.makeArrayList((ExpressionNode)asts.get(0));
-                            args.addAll(((ArgumentsNode)asts.get(1)).arguments);
-                            return new ArgumentsNode(args);
+                            ArgumentsNode argsNode = ((ArgumentsNode)asts.get(1));
+                            args.addAll(argsNode.arguments);
+                            return new ArgumentsNode(argsNode.location, args);
                         })
-                        .addRule("primary_expression", "FALSE", asts -> new IntegerLiteralNode(ValueLattice.get().parse(0)))
-                        .addRule("primary_expression", "TRUE", asts -> new IntegerLiteralNode(ValueLattice.get().parse(1)))
+                        .addRule("primary_expression", "FALSE", asts -> new IntegerLiteralNode(asts.getStartLocation(), ValueLattice.get().parse(0)))
+                        .addRule("primary_expression", "TRUE", asts -> new IntegerLiteralNode(asts.getStartLocation(), ValueLattice.get().parse(1)))
                         .addRule("primary_expression", "INTEGER_LITERAL", asts -> {
-                            return new IntegerLiteralNode(ValueLattice.get().parse(asts.getMatchedString()));
+                            return new IntegerLiteralNode(asts.getStartLocation(), ValueLattice.get().parse(asts.getMatchedString()));
                         })
-                        .addRule("primary_expression", "IDENT", asts -> new VariableAccessNode(asts.getMatchedString()))
+                        .addRule("primary_expression", "IDENT", asts -> new VariableAccessNode(asts.getStartLocation(), asts.getMatchedString()))
                         .addRule("primary_expression", "LPAREN expression RPAREN", asts -> {
                             return asts.get(1);
                         })
@@ -315,7 +324,7 @@ public class Parser implements Serializable {
                             /*List<Bit> rev = asts.get(0).<ListAST<?>>as().stream().map(s -> new Bit(B.U.parse(s.getMatchedString().substring(1)))).collect(Collectors.toList());
                             Collections.reverse(rev);
                             return new IntegerLiteralNode(new Value(rev));*/
-                            return new IntegerLiteralNode(ValueLattice.get().parse(asts.getMatchedString()));
+                            return new IntegerLiteralNode(asts.getStartLocation(), ValueLattice.get().parse(asts.getMatchedString()));
                         });
             }, "program");
 
@@ -328,12 +337,6 @@ public class Parser implements Serializable {
         }*/
         Generator generator = Parser.generator;
         Utils.repl(s -> generator.createLexer(s));
-        System.out.println(process("input int h = ~$u $h; int o_ = 0; while (o_ < h) o_ = o_ + 1; output int o = o_;"));
-        System.out.println(process("input int high = $u $h; input int low = $u $l; output int o; if (high == low) {o = 1;} else {o = $0$l;}"));
-        System.out.println("------------------------------");
-        System.out.println(process("input int high = ~$u $h; input int low = ~$u $l; output int o; if (high == low) {o = high;} else {o = $0$l;} output int o_ = o;"));
-        System.out.println("------------------------------");
-        System.out.println(process("input int high = ~$u $h; input int low = 1; output int o; if (high + low == 0) {o = high;} else {o = $0$l;} output int o_ = o;"));
     }
 
     public static class LexerAndASTRepl {
@@ -382,221 +385,221 @@ public class Parser implements Serializable {
     /**
      * Visitor that delegates each not implemented visit method to the visit method for the parent class.
      */
-    public static interface NodeVisitor<R> extends StatementVisitor<R>, ExpressionVisitor<R> {
+    public interface NodeVisitor<R> extends StatementVisitor<R>, ExpressionVisitor<R> {
 
-        public R visit(MJNode node);
+        R visit(MJNode node);
 
-        public default R visit(ProgramNode program){
+        default R visit(ProgramNode program){
             return visit((MJNode)program);
         }
 
-        public default R visit(MethodNode method){
+        default R visit(MethodNode method){
             return visit((MJNode)method);
         }
 
-        public default <T> R visit(WrapperNode<T> wrapper){
+        default <T> R visit(WrapperNode<T> wrapper){
             return visit((MJNode)wrapper);
         }
 
-        public default R visit(MethodPartNode methodPart){
+        default R visit(MethodPartNode methodPart){
             return visit((MJNode)methodPart);
         }
 
-        public default R visit(BlockPartNode blockPart){
+        default R visit(BlockPartNode blockPart){
             return visit((MethodPartNode)blockPart);
         }
 
-        public default R visit(StatementNode statement){
+        default R visit(StatementNode statement){
             return visit((BlockPartNode)statement);
         }
 
-        public default R visit(ArgumentsNode arguments){
+        default R visit(ArgumentsNode arguments){
             return visit((BlockPartNode)arguments);
         }
 
-        public default R visit(ExpressionNode expression){
+        default R visit(ExpressionNode expression){
             return visit((BlockPartNode) expression);
         }
 
-        public default R visit(MethodInvocationNode methodInvocation){
+        default R visit(MethodInvocationNode methodInvocation){
             return visit((ExpressionNode) methodInvocation);
         }
 
-        public default R visit(VariableAssignmentNode assignment){
+        default R visit(VariableAssignmentNode assignment){
             return visit((StatementNode)assignment);
         }
 
-        public default R visit(VariableDeclarationNode variableDeclaration){
+        default R visit(VariableDeclarationNode variableDeclaration){
             return visit((VariableAssignmentNode) variableDeclaration);
         }
 
-        public default R visit(OutputVariableDeclarationNode outputDecl){
+        default R visit(OutputVariableDeclarationNode outputDecl){
             return visit((VariableDeclarationNode) outputDecl);
         }
 
-        public default R visit(InputVariableDeclarationNode inputDecl){
+        default R visit(InputVariableDeclarationNode inputDecl){
             return visit((VariableDeclarationNode) inputDecl);
         }
 
-        public default R visit(BlockNode block){
+        default R visit(BlockNode block){
             return visit((StatementNode)block);
         }
 
-        public default R visit(ParametersNode parameters){
+        default R visit(ParametersNode parameters){
             return visit((MethodPartNode)parameters);
         }
 
-        public default R visit(ParameterNode parameter){
+        default R visit(ParameterNode parameter){
             return visit((MethodPartNode)parameter);
         }
 
-        public default R visit(PhiNode phi){
+        default R visit(PhiNode phi){
             return visit((ExpressionNode)phi);
         }
 
-        public default R visit(IfStatementNode ifStatement){
+        default R visit(IfStatementNode ifStatement){
             return visit((StatementNode)ifStatement);
         }
 
-        public default R visit(IfStatementEndNode ifEndStatement){
+        default R visit(IfStatementEndNode ifEndStatement){
             return visit((StatementNode)ifEndStatement);
         }
 
-        public default R visit(WhileStatementNode whileStatement){
+        default R visit(WhileStatementNode whileStatement){
             return visit((StatementNode)whileStatement);
         }
 
-        public default R visit(WhileStatementEndNode whileEndStatement){
+        default R visit(WhileStatementEndNode whileEndStatement){
             return visit((StatementNode)whileEndStatement);
         }
 
-        public default R visit(VariableAccessNode variableAccess){
+        default R visit(VariableAccessNode variableAccess){
             return visit((PrimaryExpressionNode)variableAccess);
         }
 
-        public default R visit(BinaryOperatorNode binaryOperator){
+        default R visit(BinaryOperatorNode binaryOperator){
             return visit((ExpressionNode)binaryOperator);
         }
 
-        public default R visit(UnaryOperatorNode unaryOperator){
+        default R visit(UnaryOperatorNode unaryOperator){
             return visit((ExpressionNode)unaryOperator);
         }
 
-        public default R visit(PrimaryExpressionNode primaryExpression){
+        default R visit(PrimaryExpressionNode primaryExpression){
             return visit((ExpressionNode)primaryExpression);
         }
 
         /**
          * Visit all direct children with the visitor and return the results
          */
-        public default List<R> visitChildren(MJNode node){
+        default List<R> visitChildren(MJNode node){
             return node.children().stream().map(c -> ((MJNode)c).accept(this)).collect(Collectors.toList());
         }
 
         /**
          * Visit all direct children with the visitor and discard the results
          */
-        public default void visitChildrenDiscardReturn(MJNode node){
+        default void visitChildrenDiscardReturn(MJNode node){
             node.children().stream().forEach(c -> ((MJNode)c).accept(this));
         }
     }
 
-    public static interface StatementVisitor<R> {
+    public interface StatementVisitor<R> {
 
-        public R visit(StatementNode statement);
+        R visit(StatementNode statement);
 
-        public default R visit(VariableAssignmentNode assignment){
+        default R visit(VariableAssignmentNode assignment){
             return visit((StatementNode)assignment);
         }
 
-        public default R visit(VariableDeclarationNode variableDeclaration){
+        default R visit(VariableDeclarationNode variableDeclaration){
             return visit((VariableAssignmentNode) variableDeclaration);
         }
 
-        public default R visit(OutputVariableDeclarationNode outputDecl){
+        default R visit(OutputVariableDeclarationNode outputDecl){
             return visit((VariableDeclarationNode) outputDecl);
         }
 
-        public default R visit(InputVariableDeclarationNode inputDecl){
+        default R visit(InputVariableDeclarationNode inputDecl){
             return visit((VariableDeclarationNode) inputDecl);
         }
 
-        public default R visit(BlockNode block){
+        default R visit(BlockNode block){
             return visit((StatementNode)block);
         }
 
-        public default R visit(IfStatementNode ifStatement){
+        default R visit(IfStatementNode ifStatement){
             return visit((StatementNode)ifStatement);
         }
 
-        public default R visit(IfStatementEndNode ifEndStatement){
+        default R visit(IfStatementEndNode ifEndStatement){
             return visit((StatementNode)ifEndStatement);
         }
 
-        public default R visit(WhileStatementNode whileStatement){
+        default R visit(WhileStatementNode whileStatement){
             return visit((StatementNode)whileStatement);
         }
 
-        public default R visit(WhileStatementEndNode whileEndStatement){
+        default R visit(WhileStatementEndNode whileEndStatement){
             return visit((StatementNode)whileEndStatement);
         }
 
         /**
          * Visit all direct children statements with the visitor and return the results
          */
-        public default List<R> visitChildren(MJNode node){
+        default List<R> visitChildren(MJNode node){
             return node.children().stream().filter(c -> c instanceof StatementNode).map(c -> ((StatementNode)c).accept(this)).collect(Collectors.toList());
         }
 
         /**
          * Visit all direct children statements with the visitor and discard the results
          */
-        public default void visitChildrenDiscardReturn(MJNode node){
+        default void visitChildrenDiscardReturn(MJNode node){
             node.children().stream().filter(c -> c instanceof StatementNode).forEach(c -> ((StatementNode)c).accept(this));
         }
     }
 
-    public static interface ExpressionVisitor<R> {
+    public interface ExpressionVisitor<R> {
 
 
-        public R visit(ExpressionNode expression);
+        R visit(ExpressionNode expression);
 
-        public default R visit(PhiNode phi){
+        default R visit(PhiNode phi){
             return visit((ExpressionNode)phi);
         }
 
 
-        public default R visit(VariableAccessNode variableAccess){
+        default R visit(VariableAccessNode variableAccess){
             return visit((PrimaryExpressionNode)variableAccess);
         }
 
-        public default R visit(IntegerLiteralNode literal){
+        default R visit(IntegerLiteralNode literal){
             return visit((PrimaryExpressionNode)literal);
         }
 
-        public default R visit(BinaryOperatorNode binaryOperator){
+        default R visit(BinaryOperatorNode binaryOperator){
             return visit((ExpressionNode)binaryOperator);
         }
 
-        public default R visit(UnaryOperatorNode unaryOperator){
+        default R visit(UnaryOperatorNode unaryOperator){
             return visit((ExpressionNode)unaryOperator);
         }
 
-        public default R visit(PrimaryExpressionNode primaryExpression){
+        default R visit(PrimaryExpressionNode primaryExpression){
             return visit((ExpressionNode)primaryExpression);
         }
 
         /**
          * Visit all direct children statements with the visitor and return the results
          */
-        public default List<R> visitChildren(MJNode node){
+        default List<R> visitChildren(MJNode node){
             return node.children().stream().filter(c -> c instanceof ExpressionNode).map(c -> ((ExpressionNode)c).accept(this)).collect(Collectors.toList());
         }
 
         /**
          * Visit all direct children statements with the visitor and discard the results
          */
-        public default void visitChildrenDiscardReturn(MJNode node){
+        default void visitChildrenDiscardReturn(MJNode node){
             node.children().stream().filter(c -> c instanceof ExpressionNode).forEach(c -> ((ExpressionNode)c).accept(this));
         }
     }
@@ -609,33 +612,33 @@ public class Parser implements Serializable {
      * @param <R> type of the result of each visit
      * @param <A> type of the argument for the visit methods
      */
-    public static interface ExpressionVisitorWArgs<R, A> {
+    public interface ExpressionVisitorWArgs<R, A> {
 
 
-        public R visit(ExpressionNode expression, A argument);
+        R visit(ExpressionNode expression, A argument);
 
-        public default R visit(PhiNode phi, A argument){
+        default R visit(PhiNode phi, A argument){
             return visit((ExpressionNode)phi, argument);
         }
 
 
-        public default R visit(VariableAccessNode variableAccess, A argument){
+        default R visit(VariableAccessNode variableAccess, A argument){
             return visit((PrimaryExpressionNode)variableAccess, argument);
         }
 
-        public default R visit(IntegerLiteralNode literal, A argument){
+        default R visit(IntegerLiteralNode literal, A argument){
             return visit((PrimaryExpressionNode)literal, argument);
         }
 
-        public default R visit(BinaryOperatorNode binaryOperator, A argument){
+        default R visit(BinaryOperatorNode binaryOperator, A argument){
             return visit((ExpressionNode)binaryOperator, argument);
         }
 
-        public default R visit(UnaryOperatorNode unaryOperator, A argument){
+        default R visit(UnaryOperatorNode unaryOperator, A argument){
             return visit((ExpressionNode)unaryOperator, argument);
         }
 
-        public default R visit(PrimaryExpressionNode primaryExpression, A argument){
+        default R visit(PrimaryExpressionNode primaryExpression, A argument){
             return visit((ExpressionNode)primaryExpression, argument);
         }
     }
@@ -647,7 +650,15 @@ public class Parser implements Serializable {
 
         private static int idCounter = 0;
 
-        private final int id = idCounter++;
+        private final int id;
+
+        public final Location location;
+
+        protected MJNode(Location location) {
+            this.location = location;
+            this.id = idCounter++;
+        }
+
 
         @Override
         public List<Token> getMatchedTokens() {
@@ -662,7 +673,7 @@ public class Parser implements Serializable {
         }
 
         public String getTextualId(){
-            return type().toString() + Integer.toHexString(id);
+            return shortType() + location.toString();
         }
 
         public static void resetIdCounter(){
@@ -676,6 +687,13 @@ public class Parser implements Serializable {
         Operator getOperator(){
             throw new NotImplementedException();
         }
+
+        public abstract String shortType();
+
+        @Override
+        public String type() {
+            return shortType();
+        }
     }
 
     /**
@@ -684,7 +702,8 @@ public class Parser implements Serializable {
     public static class WrapperNode<T> extends MJNode {
         public final T wrapped;
 
-        protected WrapperNode(T wrapped) {
+        protected WrapperNode(Location location, T wrapped) {
+            super(location);
             this.wrapped = wrapped;
         }
 
@@ -696,6 +715,11 @@ public class Parser implements Serializable {
         @Override
         public Operator getOperator() {
             throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public String shortType() {
+            return "s";
         }
     }
 
@@ -710,10 +734,12 @@ public class Parser implements Serializable {
         private final Map<Variable, Object> outputVariables = new IdentityHashMap<>();
         private final Map<String, MethodNode> methods = new HashMap<>();
 
-        public final BlockNode globalBlock = new BlockNode(new ArrayList<>());
+        public final BlockNode globalBlock;
 
         public ProgramNode(Context context) {
+            super(new Location(1, 1));
             this.context = context;
+            globalBlock = new BlockNode(location, new ArrayList<>());
         }
 
         public void addMethod(MethodNode methodNode){
@@ -763,8 +789,7 @@ public class Parser implements Serializable {
 
         @Override
         public String type() {
-            return "program";
-        }
+            return "program"; }
 
         @Override
         public List<BaseAST> children() {
@@ -780,6 +805,16 @@ public class Parser implements Serializable {
         public Operator getOperator() {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public String shortType() {
+            return "p";
+        }
+
+        @Override
+        public String toPrettyString(String indent, String incr) {
+            return globalBlock.toPrettyString(indent, incr);
+        }
     }
 
     /**
@@ -790,7 +825,8 @@ public class Parser implements Serializable {
         public final ParametersNode parameters;
         public final BlockNode body;
 
-        public MethodNode(String name, ParametersNode parameters, BlockNode body) {
+        public MethodNode(Location location, String name, ParametersNode parameters, BlockNode body) {
+            super(location);
             this.name = name;
             this.parameters = parameters;
             this.body = body;
@@ -820,6 +856,16 @@ public class Parser implements Serializable {
         public Operator getOperator() {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public String shortType() {
+            return "m";
+        }
+
+        @Override
+        public String getTextualId() {
+            return "m:" + name;
+        }
     }
 
     /**
@@ -827,6 +873,10 @@ public class Parser implements Serializable {
      */
     public static abstract class MethodPartNode extends MJNode {
         public MethodNode parentMethod;
+
+        public MethodPartNode(Location location) {
+            super(location);
+        }
 
         public abstract void setParentMethod(MethodNode parentMethod);
 
@@ -843,6 +893,7 @@ public class Parser implements Serializable {
         public Operator getOperator() {
             throw new UnsupportedOperationException();
         }
+
     }
 
     /**
@@ -852,7 +903,8 @@ public class Parser implements Serializable {
 
         public final List<ParameterNode> parameterNodes;
 
-        public ParametersNode(List<ParameterNode> parameterNodes) {
+        public ParametersNode(Location location, List<ParameterNode> parameterNodes) {
+            super(location);
             this.parameterNodes = parameterNodes;
         }
 
@@ -888,6 +940,11 @@ public class Parser implements Serializable {
         public Operator getOperator() {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public String shortType() {
+            return "ps";
+        }
     }
 
     /**
@@ -899,7 +956,9 @@ public class Parser implements Serializable {
         public final String name;
 
 
-        public ParameterNode(String name) {
+        public ParameterNode(Location location, String name) {
+
+            super(location);
             this.name = name;
         }
 
@@ -932,6 +991,16 @@ public class Parser implements Serializable {
         public Operator getOperator() {
             return new Operator.VariableAccess(definition);
         }
+
+        @Override
+        public String shortType() {
+            return "p";
+        }
+
+        @Override
+        public String getTextualId() {
+            return "p:" + (definition != null ? definition.name : name);
+        }
     }
 
     /**
@@ -939,6 +1008,10 @@ public class Parser implements Serializable {
      */
     public static abstract class BlockPartNode extends MethodPartNode {
         public BlockNode parentBlock = null;
+
+        public BlockPartNode(Location location) {
+            super(location);
+        }
 
         public abstract BlockPartNode[] getBlockParts();
 
@@ -971,6 +1044,10 @@ public class Parser implements Serializable {
      * A statement
      */
     public static abstract class StatementNode extends BlockPartNode {
+        public StatementNode(Location location) {
+            super(location);
+        }
+
         @Override
         public <R> R accept(NodeVisitor<R> visitor) {
             return visitor.visit(this);
@@ -992,7 +1069,8 @@ public class Parser implements Serializable {
     public static class BlockNode extends StatementNode {
         public final List<StatementNode> statementNodes;
 
-        public BlockNode(List<StatementNode> statementNodes) {
+        public BlockNode(Location location, List<StatementNode> statementNodes) {
+            super(location);
             this.statementNodes = statementNodes;
             for (BlockPartNode statementNode : statementNodes) {
                 statementNode.setParentBlock(this);
@@ -1035,6 +1113,16 @@ public class Parser implements Serializable {
             }
             return statementNodes.get(statementNodes.size() - 1);
         }
+
+        @Override
+        public String shortType() {
+            return "b";
+        }
+
+        @Override
+        public String toPrettyString(String indent, String incr) {
+            return statementNodes.stream().map(s ->s.toPrettyString(indent, incr)).filter(s -> s.trim().length() != 0).collect(Collectors.joining("\n"));
+        }
     }
 
     /**
@@ -1042,16 +1130,16 @@ public class Parser implements Serializable {
      */
     public static class VariableDeclarationNode extends VariableAssignmentNode {
 
-        public VariableDeclarationNode(String name, ExpressionNode initExpression) {
-            super(name, initExpression);
+        public VariableDeclarationNode(Location location, String name, ExpressionNode initExpression) {
+            super(location, name, initExpression);
         }
 
-        public VariableDeclarationNode(String name) {
-            this(name, null);
+        public VariableDeclarationNode(Location location, String name) {
+            this(location, name, null);
         }
 
-        public VariableDeclarationNode(Variable variable, ExpressionNode initExpression) {
-            this(variable.name, initExpression);
+        public VariableDeclarationNode(Location location, Variable variable, ExpressionNode initExpression) {
+            this(location, variable.name, initExpression);
             definition = variable;
         }
 
@@ -1103,14 +1191,29 @@ public class Parser implements Serializable {
             }
             return new Operator.LiteralOperator(vl.bot());
         }
+
+        @Override
+        public String shortType() {
+            return "d";
+        }
+
+        @Override
+        public String toPrettyString(String indent, String incr) {
+            return indent + toString();
+        }
     }
 
     public static class OutputVariableDeclarationNode extends VariableDeclarationNode {
         final String secLevel;
 
-        public OutputVariableDeclarationNode(String name, ExpressionNode initExpression, String secLevel) {
-            super(name, initExpression);
+        public OutputVariableDeclarationNode(Location location, String name, ExpressionNode initExpression, String secLevel) {
+            super(location, name, initExpression);
             this.secLevel = secLevel;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s output %s", secLevel, super.toString());
         }
 
         @Override
@@ -1132,13 +1235,18 @@ public class Parser implements Serializable {
         public Operator getOperator(Context c) {
             return new Operator.OutputVariableAssignment(definition, c.sl.parse(secLevel));
         }
+
+        @Override
+        public String shortType() {
+            return "do";
+        }
     }
 
     public static class InputVariableDeclarationNode extends VariableDeclarationNode {
         public final String secLevel;
 
-        public InputVariableDeclarationNode(String name, IntegerLiteralNode initExpression, String secLevel) {
-            super(name, initExpression);
+        public InputVariableDeclarationNode(Location location, String name, IntegerLiteralNode initExpression, String secLevel) {
+            super(location, name, initExpression);
             this.secLevel = secLevel;
         }
 
@@ -1156,6 +1264,16 @@ public class Parser implements Serializable {
         public <R> R accept(StatementVisitor<R> visitor) {
             return visitor.visit(this);
         }
+
+        @Override
+        public String shortType() {
+            return "di";
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s input %s", secLevel, super.toString());
+        }
     }
 
 
@@ -1167,7 +1285,8 @@ public class Parser implements Serializable {
         public final String variable;
         public final ExpressionNode expression;
 
-        public VariableAssignmentNode(String variable, ExpressionNode expression) {
+        public VariableAssignmentNode(Location location, String variable, ExpressionNode expression) {
+            super(location);
             this.variable = variable;
             this.expression = expression;
         }
@@ -1212,7 +1331,17 @@ public class Parser implements Serializable {
 
         @Override
         public String getTextualId() {
-            return super.toString() + "[" + variable + "]";
+            return shortType() + ":" + (definition != null ? definition.name : variable) + location.toString();
+        }
+
+        @Override
+        public String shortType() {
+            return "a";
+        }
+
+        @Override
+        public String toPrettyString(String indent, String incr) {
+            return indent + toString();
         }
     }
 
@@ -1220,6 +1349,10 @@ public class Parser implements Serializable {
      * An empty statement that has no effect
      */
     public static class EmptyStatementNode extends StatementNode {
+
+        public EmptyStatementNode(Location location) {
+            super(location);
+        }
 
         @Override
         public BlockPartNode[] getBlockParts() {
@@ -1242,8 +1375,18 @@ public class Parser implements Serializable {
         }
 
         @Override
+        public String shortType() {
+            return "e";
+        }
+
+        @Override
         public <R> R accept(StatementVisitor<R> visitor) {
             return visitor.visit(this);
+        }
+
+        @Override
+        public String toPrettyString(String indent, String incr) {
+            return indent;
         }
     }
 
@@ -1254,9 +1397,10 @@ public class Parser implements Serializable {
         public ExpressionNode conditionalExpression;
         public final BlockNode body;
 
-        public WhileStatementNode(ExpressionNode conditionalExpression, StatementNode body) {
+        public WhileStatementNode(Location location, ExpressionNode conditionalExpression, StatementNode body) {
+            super(location);
             this.conditionalExpression = conditionalExpression;
-            this.body = body instanceof BlockNode ? (BlockNode)body : new BlockNode(new ArrayList<>(Arrays.asList(body)));
+            this.body = body instanceof BlockNode ? (BlockNode)body : new BlockNode(body.location, new ArrayList<>(Arrays.asList(body)));
         }
 
         @Override
@@ -1288,6 +1432,16 @@ public class Parser implements Serializable {
         public <R> R accept(StatementVisitor<R> visitor) {
             return visitor.visit(this);
         }
+
+        @Override
+        public String shortType() {
+            return "w";
+        }
+
+        @Override
+        public String toPrettyString(String indent, String incr) {
+            return String.format("%swhile (%s) {\n%s\n%s}", indent, conditionalExpression, body.toPrettyString(indent + incr, incr), indent);
+        }
     }
 
     /**
@@ -1298,21 +1452,22 @@ public class Parser implements Serializable {
         public final BlockNode ifBlock;
         public final BlockNode elseBlock;
 
-        public IfStatementNode(ExpressionNode conditionalExpression, StatementNode ifBlock, StatementNode elseBlock) {
+        public IfStatementNode(Location location, ExpressionNode conditionalExpression, StatementNode ifBlock, StatementNode elseBlock) {
+            super(location);
             this.conditionalExpression = conditionalExpression;
-            this.ifBlock = appendIfEnd(ifBlock instanceof BlockNode ? (BlockNode)ifBlock : new BlockNode(new ArrayList<>(Arrays.asList(ifBlock))));
-            this.elseBlock = appendIfEnd(elseBlock instanceof BlockNode ? (BlockNode)elseBlock : new BlockNode(new ArrayList<>(Arrays.asList(elseBlock))));
+            this.ifBlock = appendIfEnd(ifBlock instanceof BlockNode ? (BlockNode)ifBlock : new BlockNode(ifBlock.location, new ArrayList<>(Arrays.asList(ifBlock))));
+            this.elseBlock = appendIfEnd(elseBlock instanceof BlockNode ? (BlockNode)elseBlock : new BlockNode(elseBlock.location, new ArrayList<>(Arrays.asList(elseBlock))));
         }
 
-        public IfStatementNode(ExpressionNode conditionalExpression, StatementNode ifBlock) {
-            this(conditionalExpression, ifBlock, new BlockNode(new ArrayList<>()));
+        public IfStatementNode(Location location, ExpressionNode conditionalExpression, StatementNode ifBlock) {
+            this(location, conditionalExpression, ifBlock, new BlockNode(location, new ArrayList<>()));
         }
 
         private BlockNode appendIfEnd(BlockNode blockNode){
             if (!(blockNode.getLastStatementOrNull() instanceof IfStatementEndNode)){
                 List<StatementNode> tmp = new ArrayList<>(blockNode.statementNodes);
-                tmp.add(new IfStatementEndNode());
-                return new BlockNode(tmp);
+                tmp.add(new IfStatementEndNode(location));
+                return new BlockNode(blockNode.location, tmp);
             }
             return blockNode;
         }
@@ -1357,12 +1512,31 @@ public class Parser implements Serializable {
         public <R> R accept(StatementVisitor<R> visitor) {
             return visitor.visit(this);
         }
+
+        @Override
+        public String shortType() {
+            return "i";
+        }
+
+        @Override
+        public String toPrettyString(String indent, String incr) {
+            String thenStr = ifBlock.toPrettyString(indent + incr, incr);
+            if (hasElseBlock()) {
+                return String.format("%sif (%s) {\n%s\n%s} else {\n%s\n%s}", indent, conditionalExpression, thenStr, indent, elseBlock.toPrettyString(indent + incr, incr), indent);
+            } else {
+                return String.format("%sif (%s) {\n%s\n%s}", indent, conditionalExpression, thenStr, indent);
+            }
+        }
     }
 
     /**
      * Indicates the end of an {@link IfStatementNode}
      */
     public static class IfStatementEndNode extends StatementNode {
+
+        public IfStatementEndNode(Location location) {
+            super(location);
+        }
 
         @Override
         public BlockPartNode[] getBlockParts() {
@@ -1375,6 +1549,11 @@ public class Parser implements Serializable {
         }
 
         @Override
+        public String shortType() {
+            return "ie";
+        }
+
+        @Override
         public <R> R accept(StatementVisitor<R> visitor) {
             return visitor.visit(this);
         }
@@ -1383,12 +1562,21 @@ public class Parser implements Serializable {
         public String type() {
             return "ifEnd";
         }
+
+        @Override
+        public String toPrettyString(String indent, String incr) {
+            return indent;
+        }
     }
 
     /**
      * Indicates the end of an {@link WhileStatementNode}
      */
     public static class WhileStatementEndNode extends StatementNode {
+
+        public WhileStatementEndNode(Location location) {
+            super(location);
+        }
 
         @Override
         public BlockPartNode[] getBlockParts() {
@@ -1409,6 +1597,16 @@ public class Parser implements Serializable {
         public String type() {
             return "whileEnd";
         }
+
+        @Override
+        public String shortType() {
+            return "we";
+        }
+
+        @Override
+        public String toPrettyString(String indent, String incr) {
+            return indent;
+        }
     }
 
     /**
@@ -1418,6 +1616,7 @@ public class Parser implements Serializable {
         public final ExpressionNode expression;
 
         public ExpressionStatementNode(ExpressionNode expression) {
+            super(expression.location);
             this.expression = expression;
         }
 
@@ -1450,6 +1649,11 @@ public class Parser implements Serializable {
         public <R> R accept(StatementVisitor<R> visitor) {
             return visitor.visit(this);
         }
+
+        @Override
+        public String toPrettyString(String indent, String incr) {
+            return indent + toString();
+        }
     }
 
     /**
@@ -1457,8 +1661,8 @@ public class Parser implements Serializable {
      */
     public static class ReturnStatementNode extends ExpressionStatementNode {
 
-        public ReturnStatementNode(){
-            super(new IntegerLiteralNode(ValueLattice.get().bot()));
+        public ReturnStatementNode(Location location){
+            super(new IntegerLiteralNode(location, ValueLattice.get().bot()));
         }
 
         public ReturnStatementNode(ExpressionNode expression) {
@@ -1500,12 +1704,22 @@ public class Parser implements Serializable {
         public <R> R accept(StatementVisitor<R> visitor) {
             return visitor.visit(this);
         }
+
+        @Override
+        public String shortType() {
+            return "r";
+        }
     }
 
     /**
      * Base node for all expressions
      */
     public static abstract class ExpressionNode extends BlockPartNode {
+
+        public ExpressionNode(Location location) {
+            super(location);
+        }
+
         @Override
         public <R> R accept(NodeVisitor<R> visitor) {
             return visitor.visit(this);
@@ -1533,6 +1747,7 @@ public class Parser implements Serializable {
         public final Operator op;
 
         public BinaryOperatorNode(ExpressionNode left, ExpressionNode right, LexerTerminal operator) {
+            super(left.location);
             this.left = left;
             this.right = right;
             this.operator = operator;
@@ -1603,6 +1818,11 @@ public class Parser implements Serializable {
         public Operator getOperator() {
             return op;
         }
+
+        @Override
+        public String shortType() {
+            return operator.representation;
+        }
     }
 
     /**
@@ -1614,6 +1834,7 @@ public class Parser implements Serializable {
         public final Operator op;
 
         public UnaryOperatorNode(ExpressionNode expression, LexerTerminal operator) {
+            super(expression.location);
             this.expression = expression;
             this.operator = operator;
             switch (operator){
@@ -1665,6 +1886,11 @@ public class Parser implements Serializable {
         public Operator getOperator() {
             return op;
         }
+
+        @Override
+        public String shortType() {
+            return operator.representation;
+        }
     }
 
     /**
@@ -1673,7 +1899,8 @@ public class Parser implements Serializable {
     public static class ArgumentsNode extends BlockPartNode {
         public final List<ExpressionNode> arguments;
 
-        public ArgumentsNode(List<ExpressionNode> arguments) {
+        public ArgumentsNode(Location location, List<ExpressionNode> arguments) {
+            super(location);
             this.arguments = arguments;
         }
 
@@ -1701,12 +1928,21 @@ public class Parser implements Serializable {
         public <R> R accept(NodeVisitor<R> visitor) {
             return visitor.visit(this);
         }
+
+        @Override
+        public String shortType() {
+            return "args";
+        }
     }
 
     /**
      * Base class for all primary expressions
      */
     public static abstract class PrimaryExpressionNode extends ExpressionNode {
+        public PrimaryExpressionNode(Location location) {
+            super(location);
+        }
+
         @Override
         public BlockPartNode[] getBlockParts() {
             return new BlockPartNode[]{};
@@ -1735,14 +1971,15 @@ public class Parser implements Serializable {
         public final Value value;
         public final Operator op;
 
-        public IntegerLiteralNode(Value value) {
+        public IntegerLiteralNode(Location location, Value value) {
+            super(location);
             this.value = value;
             this.op = new Operator.LiteralOperator(value);
         }
 
         @Override
         public String toString() {
-            return "" + value;
+            return value.toLiteralString();
         }
 
         @Override
@@ -1752,7 +1989,7 @@ public class Parser implements Serializable {
 
         @Override
         public List<BaseAST> children() {
-            return Utils.makeArrayList(new WrapperNode<>(value));
+            return Utils.makeArrayList(new WrapperNode<>(location, value));
         }
 
         @Override
@@ -1774,6 +2011,11 @@ public class Parser implements Serializable {
         public Operator getOperator() {
             return op;
         }
+
+        @Override
+        public String shortType() {
+            return "i";
+        }
     }
 
     /**
@@ -1784,7 +2026,8 @@ public class Parser implements Serializable {
         public final String method;
         public final ArgumentsNode arguments;
 
-        public MethodInvocationNode(String method, ArgumentsNode arguments) {
+        public MethodInvocationNode(Location location, String method, ArgumentsNode arguments) {
+            super(location);
             this.method = method;
             this.arguments = arguments;
         }
@@ -1833,6 +2076,11 @@ public class Parser implements Serializable {
         public Operator getOperator() {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public String shortType() {
+            return "mi";
+        }
     }
 
     /**
@@ -1842,7 +2090,8 @@ public class Parser implements Serializable {
         public final String ident;
         Variable definition;
 
-        public VariableAccessNode(String ident) {
+        public VariableAccessNode(Location location, String ident) {
+            super(location);
             this.ident = ident;
         }
 
@@ -1878,9 +2127,13 @@ public class Parser implements Serializable {
 
         @Override
         public String getTextualId() {
-            return String.format("%s(%s)", super.getTextualId(), ident);
+            return shortType() + ":" + (definition != null ? definition.name : ident) + location.toString();
         }
 
+        @Override
+        public String shortType() {
+            return "ac";
+        }
         @Override
         public Operator getOperator() {
             return new Operator.VariableAccess(definition);
@@ -1891,11 +2144,14 @@ public class Parser implements Serializable {
      * A phi node to join two variables from different control paths
      */
     public static class PhiNode extends ExpressionNode {
+        public final List<ExpressionNode> controlDeps;
         public final List<VariableAccessNode> joinedVariables;
 
-        public PhiNode(List<Variable> joinedVariables) {
+        public PhiNode(Location location, List<ExpressionNode> controlDeps, List<Variable> joinedVariables) {
+            super(location);
+            this.controlDeps = controlDeps;
             this.joinedVariables = joinedVariables.stream().map(v -> {
-                VariableAccessNode n = new VariableAccessNode(v.name);
+                VariableAccessNode n = new VariableAccessNode(location, v.name);
                 n.definition = v;
                 return n;
             }).collect(Collectors.toList());
@@ -1943,6 +2199,16 @@ public class Parser implements Serializable {
                 return Operator.PHI;
             }
             return Operator.PHI_GENERIC;
+        }
+
+        /*@Override
+        public String getTextualId() {
+            return shortType() + "(" + joinedVariables.stream().map(MJNode::getTextualId).collect(Collectors.joining(",")) + ")";
+        }*/
+
+        @Override
+        public String shortType() {
+            return "ϕ";
         }
     }
 

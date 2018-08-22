@@ -7,6 +7,6 @@ import swp.lexer.LexerError;
  */
 public class AutomatonConstructionError extends LexerError {
 	public AutomatonConstructionError(String message) {
-		super(message);
+		super(null, message);
 	}
 }

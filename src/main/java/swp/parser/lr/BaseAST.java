@@ -29,23 +29,17 @@ public abstract class BaseAST {
 	}
 
 	public String toPrettyString(){
-		return toPrettyString(1, 0);
+		return toPrettyString("", "\t");
 	}
 
-	public String toPrettyString(int ident){
-		return toPrettyString(ident, 0);
-	}
-
-	protected String toPrettyString(int ident, int total){
+	public String toPrettyString(String indent, String incr){
 		StringBuilder builder = new StringBuilder();
-		for (int i = 0; i < total; i++){
-			builder.append("\t");
-		}
+		builder.append(indent);
 		builder.append("(").append(type());
 		builder.append("\n");
 		List<BaseAST> children = children();
 		for (int i = 0; i < children.size(); i++){
-			builder.append(children.get(i).toPrettyString(ident, total + ident)).append("\n");
+			builder.append(children.get(i).toPrettyString(indent + incr, incr)).append("\n");
 		}
 		if (builder.codePointAt(builder.length() - 1) == '\n') {
 			builder.deleteCharAt(builder.length() - 1);

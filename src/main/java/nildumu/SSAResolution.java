@@ -89,7 +89,7 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
         Variable newVariable = create(assignment.definition);
         assignment.definition = newVariable;
         return new VisRet(true,
-                new Parser.VariableDeclarationNode(newVariable, assignment.expression));
+                new Parser.VariableDeclarationNode(assignment.location, newVariable, assignment.expression));
     }
 
     @Override
@@ -144,7 +144,7 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
             varsToJoin.add(elseRedefines.getOrDefault(var, var));
             Variable created = create(var);
             Parser.VariableDeclarationNode localVarDecl =
-                    new Parser.VariableDeclarationNode(created.name, new Parser.PhiNode(varsToJoin));
+                    new Parser.VariableDeclarationNode(ifStatement.location, created.name, new Parser.PhiNode(ifStatement.location, Collections.singletonList(ifStatement.conditionalExpression), varsToJoin));
             localVarDecl.definition = created;
             phiStatements.add(localVarDecl);
         }
@@ -162,17 +162,17 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
             Variable whileEndVariable = resolve(variable);
             Variable newVariable = create(variable);
             whileStatement.body.statementNodes.add(0,
-                    new Parser.VariableDeclarationNode(newVariable,
-                        new Parser.PhiNode(Arrays.asList(variable, whileEndVariable))));
+                    new Parser.VariableDeclarationNode(whileStatement.location, newVariable,
+                        new Parser.PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable))));
             replaceVariable(variable, newVariable, whileStatement.body);
-            whileStatement.conditionalExpression = replaceVariableWithExpression(variable, new Parser.PhiNode(Arrays.asList(variable, whileEndVariable)), whileStatement.conditionalExpression);
+            whileStatement.conditionalExpression = replaceVariableWithExpression(variable, new Parser.PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)), whileStatement.conditionalExpression);
             variableAndWhileEnd.put(variable, whileEndVariable);
         }
         newVariables.pop();
         return new VisRet(false,
                 variableAndWhileEnd.entrySet().stream().map(e ->
-                new Parser.VariableDeclarationNode(create(e.getKey()),
-                        new Parser.PhiNode(Arrays.asList(e.getKey(), e.getValue()))))
+                new Parser.VariableDeclarationNode(whileStatement.location, create(e.getKey()),
+                        new Parser.PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(e.getKey(), e.getValue()))))
                 .collect(Collectors.toList()));
     }
 

@@ -49,9 +49,16 @@ public class PythonCaller {
     }
 
     private static Path createJSONFile(Context context, Sec<?> level){
-        Path tmp = null;
         try {
-            tmp = Files.createTempFile(null, ".json");
+            return createJSONFile(Files.createTempFile(null, ".json"), context, level);
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new RuntimeException();
+        }
+    }
+
+    public static Path createJSONFile(Path path, Context context, Sec<?> level){
+        try {
             StringBuilder builder = new StringBuilder();
             builder.append("{").append("\"bits\": {");
             List<String> bitRules = new ArrayList<>();
@@ -61,12 +68,12 @@ public class PythonCaller {
             builder.append(String.join(",\n", bitRules));
             builder.append(String.format("},\n\"high\":[%s], \n\"output\": [%s]\n}",
                     toJson(context.getInputBits(level)), toJson(context.getOutputBits(level))));
-            Files.write(tmp, Collections.singleton(builder));
+            Files.write(path, Collections.singleton(builder));
+            return path;
         } catch (IOException e) {
             e.printStackTrace();
             throw new RuntimeException();
         }
-        return tmp;
     }
 
     private static String toJson(Collection<?> col){

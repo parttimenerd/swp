@@ -1,7 +1,10 @@
 package nildumu;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,8 +43,6 @@ public class Context {
     }
 
     public final SecurityLattice<?> sl;
-    /** The stack of currently affecting conditions */
-    public final Stack<Bit> ccStack = new Stack<>();
 
     public final IOValues input = new IOValues();
 
@@ -80,7 +81,7 @@ public class Context {
         }
     }, FORBID_DELETIONS, FORBID_VALUE_UPDATES);
 
-    private final DefaultMap<Parser.MJNode, Value> nodeValueMap = new DefaultMap<>(new IdentityHashMap<>(), new DefaultMap.Extension<MJNode, Value>() {
+    private final DefaultMap<Parser.MJNode, Value> nodeValueMap = new DefaultMap<>(new LinkedHashMap<>(), new DefaultMap.Extension<MJNode, Value>() {
         @Override
         public void handleValueUpdate(DefaultMap<MJNode, Value> map, MJNode key, Value value) {
             throw new UnsupportedOperationException(String.format("Cannot update the value of '%s' from '%s' to '%s', updates are not supported", key, map.get(key), value));
@@ -150,64 +151,13 @@ public class Context {
         return value;
     }
 
-    /** Pushes an element onto the cc-stack */
-    public void pushCC(Bit bit) {
-        ccStack.push(bit);
-    }
-
-    public void popCC(){
-        ccStack.pop();
-    }
-
-    public Bit origin(Bit bit) {
-        return originMap.get(bit);
-    }
-
-    /**
-     * Sets the origin of the bit
-     *
-     * <p><b>Important note: updating the origin bit of a bit is prohibited</b>
-     */
-    public void origin(Bit bit, Bit origin) {
-        originMap.put(bit, origin);
-    }
-
-    /** Base origin of a bit, that is its own origin. */
-    public Bit origin_(Bit bit) {
-        if (origin(bit) == bit) {
-            return bit;
-        }
-        return origin_(origin(bit));
-    }
-
-    public Bit applyCondition(Bit bit) {
-        if (ccStack.isEmpty() || c(bit).contains(ccStack.peek())) {
-            return bit;
-        }
-        Bit newBit =
-                new Bit(
-                        v(bit),
-                        v(bit) == B.U ? d(bit) : DependencySetLattice.get().bot(),
-                        new DependencySet(ccStack.peek()));
-        origin(newBit, bit);
-        return newBit;
-    }
-
-    public Value applyCondition(Value value) {
-        return value.stream().map(this::applyCondition).collect(Value.collector());
-    }
-
     public boolean checkInvariants(Bit bit) {
         return (sec(bit) == sl.bot() || (v(bit).isConstant() && d(bit).isEmpty() && c(bit).isEmpty()))
                 && (!v(bit).isConstant() || (d(bit).isEmpty() && sec(bit) == sl.bot()));
     }
 
     public boolean isInputBit(Bit bit) {
-        return v(bit) == B.U && d(bit).isEmpty();
-    }
-
-    public boolean isInputBit_(Bit bit) {
-        return isInputBit(origin_(bit));
+        return input.contains(bit);
     }
 
     public Value nodeValue(MJNode node){
@@ -223,7 +173,7 @@ public class Context {
     }
 
     public Value op(Parser.MJNode node, List<Value> arguments){
-        return operatorForNode(node).compute(this, arguments);
+        return operatorForNode(node).compute(this, node, arguments);
     }
 
     public List<MJNode> paramNode(MJNode node){
@@ -232,14 +182,10 @@ public class Context {
 
     public Value evaluate(MJNode node){
         System.out.println("Evaluate node " + node);
-        List<Value> args = paramNode(node).stream().map(this::nodeValue).map(this::applyCondition).collect(Collectors.toList());
-        Value opVal = op(node, args);
-        Value newValue = applyCondition(opVal);
+        List<Value> args = paramNode(node).stream().map(this::nodeValue).collect(Collectors.toList());
+        Value newValue = op(node, args);
         nodeValue(node, newValue);
-        newValue.description(node.getTextualId());
-        if (!opVal.equals(newValue)){
-            opVal.description("pre:" + newValue.description());
-        }
+        newValue.description(node.getTextualId()).node(node);
         return newValue;
     }
 
@@ -282,7 +228,6 @@ public class Context {
         for (int i = 0; i < variableStates.size(); i++){
             builder.append(variableStates.get(i));
         }
-        builder.append(String.format("CC-Stack: %s\n", ccStack.stream().map(Bit::toString).collect(Collectors.joining(" -> "))));
         builder.append("Input\n" + input.toString()).append("Output\n" + output.toString());
         return builder.toString();
     }
@@ -322,5 +267,17 @@ public class Context {
 
     public LeakageCalculation.JungGraph getJungGraphForVisu(Sec<?> secLevel){
         return new LeakageCalculation.JungGraph(getLeakageGraph().rules, secLevel, getLeakageGraph().minCutBits(secLevel));
+    }
+
+    public Set<MJNode> nodes(){
+        return nodeValueMap.keySet();
+    }
+
+    public List<String> variableNames(){
+        List<String> variables = new ArrayList<>();
+        for (int i = variableStates.size() - 1; i >= 0; i--){
+            variables.addAll(variableStates.get(i).variableNames());
+        }
+        return variables;
     }
 }

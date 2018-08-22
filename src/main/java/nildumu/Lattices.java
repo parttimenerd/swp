@@ -33,29 +33,6 @@ public class Lattices {
     }
 
     /**
-     * Result of the comparison of two lattice elements
-     */
-    public static enum ComparisonResult {
-        /**
-         * The first element is lower than the other element
-         */
-        LT,
-        /**
-         * The first element is greater than the other element
-         */
-        GT,
-        /**
-         * The first element is equal to the other element
-         */
-        EQ,
-        /**
-         * Both elements are not comparable to each other, like n and m in
-         * the diamond lattice
-         */
-        UN
-    }
-
-    /**
      * A basic lattice that contains elements of type T. Has only a bottom element.
      *
      *
@@ -63,11 +40,6 @@ public class Lattices {
      * @param <T> type of the elements
      */
     public static interface Lattice<T> {
-
-        /**
-         * Compares two elements
-         */
-        ComparisonResult compare(T a, T b);
 
         /**
          * Supremum of the two elements
@@ -208,11 +180,6 @@ public class Lattices {
 
         public X create(Collection<T> elements){
             return setProducer.apply(elements);
-        }
-
-        @Override
-        public ComparisonResult compare(X a, X b) {
-            throw new NotImplementedException();
         }
 
         @Override
@@ -361,11 +328,6 @@ public class Lattices {
         }
 
         @Override
-        public ComparisonResult compare(BasicSecLattice a, BasicSecLattice b) {
-            throw new NotImplementedException();
-        }
-
-        @Override
         public BasicSecLattice sup(BasicSecLattice a, BasicSecLattice b) {
             return a == LOW ? b : a;
         }
@@ -425,11 +387,6 @@ public class Lattices {
         @Override
         public DiamondSecLattice bot() {
             return LOW;
-        }
-
-        @Override
-        public ComparisonResult compare(DiamondSecLattice a, DiamondSecLattice b) {
-            throw new NotImplementedException();
         }
 
         @Override
@@ -527,18 +484,29 @@ public class Lattices {
         }
 
         @Override
-        public ComparisonResult compare(B a, B b) {
-            return null;
+        public B sup(B a, B b) {
+            if (a != b && a.isConstant() && b.isConstant()){
+                return U;
+            }
+            return lowerEqualsThan(a, b) ? b : a;
         }
 
         @Override
-        public B sup(B a, B b) {
-            return null;
+        public boolean lowerEqualsThan(B a, B b) {
+            return a == X || a == b || (a.isConstant() && b == U);
+        }
+
+        @Override
+        public boolean greaterEqualsThan(B a, B b) {
+            return lowerEqualsThan(b, a);
         }
 
         @Override
         public B inf(B a, B b) {
-            return null;
+            if (a != b && a.isConstant() && b.isConstant()){
+                return X;
+            }
+            return lowerEqualsThan(a, b) ? a : b;
         }
 
         public B bot(){
@@ -664,11 +632,6 @@ public class Lattices {
 
         public BitLattice() {
 
-        }
-
-        @Override
-        public ComparisonResult compare(Bit a, Bit b) {
-            throw new NotImplementedException();
         }
 
         @Override
@@ -818,13 +781,13 @@ public class Lattices {
 
         @Override
         public String toString() {
-            if (value == null || value.description.isEmpty()) {
+            /*if (value == null || value.description.isEmpty()) {
                 if (!hasDependencies()) {
                     return bs.toString(val);
                 }
                 return String.format("(%s, %s, %s)", bs.toString(val), ds.toString(dataDeps), ds.toString(controlDeps));
-            }
-            return String.format("%s[%d]", value.description, valueIndex);
+            }*/
+            return String.format("%s[%d]%s", value == null ? "" : (value.node() == null ? value.description() : value.node().getTextualId()), valueIndex, val);
         }
 
         @Override
@@ -861,7 +824,7 @@ public class Lattices {
             }
             String name = "";
             if (value != null && !value.description.isEmpty()){
-                name = String.format("%s[%d]|", value.description, valueIndex);
+                name = String.format("%s[%d]|", value.node() == null ? value.description() : value.node().getTextualId(), valueIndex);
             }
             return String.format("(%s%s, %s, %s)", name, bs.toString(val), ds.toString(dataDeps), ds.toString(controlDeps));
         }
@@ -882,7 +845,9 @@ public class Lattices {
         }
 
         public Bit value(Value value){
-            this.value = value;
+            if (this.value == null) {
+                this.value = value;
+            }
             return this;
         }
 
@@ -896,11 +861,6 @@ public class Lattices {
         private static final ValueLattice lattice = new ValueLattice();
 
         private static final Value BOT = ValueLattice.get().parse("0bxx");
-
-        @Override
-        public ComparisonResult compare(Value a, Value b) {
-            throw new NotImplementedException();
-        }
 
         @Override
         public Value sup(Value a, Value b) {
@@ -931,7 +891,7 @@ public class Lattices {
                     }
                     Pair<Bit, Integer> ret = bl.parse(i, str, idToElement);
                     i = ret.second;
-                    bits.add(ret.first);
+                    bits.add(0, ret.first);
                     while (i < str.length() && str.charAt(i) == ' ') {
                         i++;
                     }
@@ -1000,6 +960,7 @@ public class Lattices {
         final List<Bit> bits;
 
         private String description = "";
+        private Parser.MJNode node = null;
 
         public Value(List<Bit> bits) {
             assert bits.size() > 1;
@@ -1054,12 +1015,9 @@ public class Lattices {
 
         @Override
         public String toString() {
-
-                List<Bit> reversedBits = new ArrayList<>(bits);
-                Collections.reverse(reversedBits);
-                return reversedBits.stream().map(Bit::toString).collect(Collectors.joining(""));
-
-            //return description;
+            List<Bit> reversedBits = new ArrayList<>(bits);
+            Collections.reverse(reversedBits);
+            return reversedBits.stream().map(b -> b.val.toString()).collect(Collectors.joining(""));
         }
 
         public String repr() {
@@ -1108,7 +1066,7 @@ public class Lattices {
             int result = 0;
             boolean neg = signBit().val == ONE;
             int signBitVal = signBit().val.value.get();
-            for (int i = 0; i < bits.size() - 1; i++){
+            for (int i = bits.size() - 1; i >= 0; i--){
                 result = result * 2;
                 int bitVal = bits.get(i).val.value.get();
                 if (signBitVal != bitVal){
@@ -1116,7 +1074,7 @@ public class Lattices {
                 }
             }
             if (neg){
-                return -result;
+                return -result - 1;
             }
             return result;
         }
@@ -1140,9 +1098,9 @@ public class Lattices {
         }
 
         public Value description(String description){
-            //if (description.isEmpty()) {
+            if (this.description.isEmpty()) {
                 this.description = description;
-            //}
+            }
             return this;
         }
 
@@ -1152,6 +1110,26 @@ public class Lattices {
 
         public Stream<Bit> getRange(ValueRange range) {
             return Util.stream(range).mapToObj(bits::get);
+        }
+
+        public Value node(Parser.MJNode node) {
+            if (this.node == null) {
+                this.node = node;
+            }
+            return this;
+        }
+
+        public Parser.MJNode node(){
+            return node;
+        }
+
+        public String toLiteralString(){
+            if (isConstant()){
+                return Integer.toString(asInt());
+            }
+            List<Bit> reversedBits = new ArrayList<>(bits);
+            Collections.reverse(reversedBits);
+            return "0b" + reversedBits.stream().map(b -> b.val.toString()).collect(Collectors.joining(""));
         }
     }
 

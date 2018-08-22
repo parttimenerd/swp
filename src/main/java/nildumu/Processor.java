@@ -58,7 +58,6 @@ public class Processor {
                 } else {
                     statementNodesToOmitOneTime.add(ifStatement.elseBlock);
                 }
-                context.pushCC(cond.get(1));
                 return false;
             }
 
@@ -69,13 +68,11 @@ public class Processor {
 
             @Override
             public Boolean visit(Parser.IfStatementEndNode ifEndStatement) {
-                context.popCC();
                 return false;
             }
 
             @Override
             public Boolean visit(Parser.WhileStatementEndNode whileEndStatement) {
-                context.popCC();
                 return false;
             }
 

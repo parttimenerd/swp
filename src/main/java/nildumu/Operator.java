@@ -171,13 +171,16 @@ public interface Operator {
 
         public final String symbol;
 
+        Parser.MJNode currentNode;
+
         public BinaryOperator(String symbol) {
             this.symbol = symbol;
         }
 
         @Override
-        public Value compute(Context c, List<Value> arguments) {
+        public Value compute(Context c, Parser.MJNode node, List<Value> arguments) {
             checkArguments(arguments);
+            currentNode = node;
             return compute(c, arguments.get(0), arguments.get(1));
         }
 
@@ -220,6 +223,7 @@ public interface Operator {
      * </ol>
      */
     public static abstract class BitWiseBinaryOperatorStructured extends BitWiseBinaryOperator {
+
         public BitWiseBinaryOperatorStructured(String symbol) {
             super(symbol);
         }
@@ -231,7 +235,7 @@ public interface Operator {
                 return new Bit(bitValue);
             }
             DependencySet dataDeps = computeDataDependencies(x, y, bitValue);
-            DependencySet controlDeps = computeControlDeps(x, y, bitValue, dataDeps);
+            DependencySet controlDeps = computeControlDeps(c, currentNode, bitValue, dataDeps);
             return new Bit(bitValue, dataDeps, controlDeps);
         }
 
@@ -239,8 +243,8 @@ public interface Operator {
 
         abstract DependencySet computeDataDependencies(Bit x, Bit y, B computedBitValue);
 
-        DependencySet computeControlDeps(Bit x, Bit y, Lattices.B computedBitValue, DependencySet computedDataDeps) {
-            return computeControllDeps(computedDataDeps);
+        DependencySet computeControlDeps(Context c, Parser.MJNode node, Lattices.B computedBitValue, DependencySet computedDataDeps) {
+            return DependencySetLattice.get().bot();
         }
     }
 
@@ -248,12 +252,15 @@ public interface Operator {
 
         private final String symbol;
 
+        Parser.MJNode currentNode;
+
         public BitWiseOperator(String symbol) {
             this.symbol = symbol;
         }
 
         @Override
-        public Value compute(Context c, List<Value> values) {
+        public Value compute(Context c, Parser.MJNode node, List<Value> values) {
+            currentNode = node;
             int maxWidth = values.stream().mapToInt(Value::size).max().getAsInt();
             List<Value> extendedValues = values.stream().map(v -> v.extend(maxWidth)).collect(Collectors.toList());
             return IntStream.range(1, extendedValues.size() + 1).mapToObj(i -> computeBit(c, extendedValues.stream().map(v -> v.get(i)).collect(Collectors.toList()))).collect(Value.collector());
@@ -288,7 +295,7 @@ public interface Operator {
                 return new Bit(bitValue);
             }
             DependencySet dataDeps = computeDataDependencies(bits, bitValue);
-            DependencySet controlDeps = computeControlDeps(bits, bitValue, dataDeps);
+            DependencySet controlDeps = computeControlDeps(c, currentNode, bitValue, dataDeps);
             return new Bit(bitValue, dataDeps, controlDeps);
         }
 
@@ -296,8 +303,8 @@ public interface Operator {
 
         abstract DependencySet computeDataDependencies(List<Bit> bits, B computedBitValue);
 
-        DependencySet computeControlDeps(List<Bit> bits, Lattices.B computedBitValue, DependencySet computedDataDeps) {
-            return computeControllDeps(computedDataDeps);
+        DependencySet computeControlDeps(Context c, Parser.MJNode node, Lattices.B computedBitValue, DependencySet computedDataDeps) {
+            return DependencySetLattice.get().bot();
         }
     }
 
@@ -311,14 +318,13 @@ public interface Operator {
         public Value compute(Context c, Value x, Value y) {
             List<B> bitValues = computeBitValues(x, y);
             List<DependencySet> dataDeps = computeDataDependencies(x, y, bitValues);
-            List<DependencySet> controlDeps = dataDeps.stream().map(this::computeControllDeps).collect(Collectors.toList());
             return x.lattice().map(x, y, (a, b) -> {
                 List<Bit> bits = new ArrayList<>();
                 for (int i = 0; i < x.size(); i++){
                     if (bitValues.get(i).isConstant()){
                         bits.add(new Bit(bitValues.get(i)));
                     } else {
-                        bits.add(new Bit(bitValues.get(i), dataDeps.get(i), controlDeps.get(i)));
+                        bits.add(new Bit(bitValues.get(i), dataDeps.get(i), DependencySetLattice.get().bot()));
                     }
                 }
                 return new Value(bits);
@@ -540,8 +546,12 @@ public interface Operator {
         }
 
         @Override
-        public DependencySet computeControlDeps(Bit x, Bit y, B computedBitValue, DependencySet computedDataDependencies) {
-            return ds.sup(c(x), c(y));
+        public DependencySet computeControlDeps(Context context, Parser.MJNode node, B computedBitValue, DependencySet computedDataDependencies) {
+            assert node instanceof Parser.PhiNode;
+            if (computedBitValue == B.U) {
+                return ((Parser.PhiNode) node).controlDeps.stream().map(n -> context.nodeValue(n).get(1)).collect(DependencySet.collector());
+            }
+            return DependencySetLattice.get().bot();
         }
     };
 
@@ -558,8 +568,12 @@ public interface Operator {
         }
 
         @Override
-        public DependencySet computeControlDeps(List<Bit> bits, B computedBitValue, DependencySet computedDataDependencies) {
-            return ds.sup(bits.stream().map(b -> b.controlDeps));
+        public DependencySet computeControlDeps(Context context, Parser.MJNode node, B computedBitValue, DependencySet computedDataDependencies) {
+            assert node instanceof Parser.PhiNode;
+            if (computedBitValue == B.U) {
+                return ((Parser.PhiNode) node).controlDeps.stream().map(n -> context.nodeValue(n).get(1)).collect(DependencySet.collector());
+            }
+            return DependencySetLattice.get().bot();
         }
     };
 
@@ -571,12 +585,11 @@ public interface Operator {
         Value compute(Context c, Value first, Value second) {
             List<Bit> res = new ArrayList<>();
             Util.Box<Bit> carry = new Util.Box<>(Bit.ZERO);
-            vl.mapBitsToValue(first, second, (a, b) -> {
+            return  vl.mapBitsToValue(first, second, (a, b) -> {
                 Pair<Bit, Bit> add = fullAdder(c, a, b, carry.val);
                 carry.val = add.second;
                 return add.first;
             });
-            return new Value(res);
         }
 
         Pair<Bit, Bit> fullAdder(Context context, Bit a, Bit b, Bit c) {
@@ -612,8 +625,8 @@ public interface Operator {
         throw new NotImplementedException();
     }
 
-    default DependencySet computeControllDeps(DependencySet dataDeps){
-        return dataDeps.stream().flatMap(d -> d.controlDeps.stream()).collect(DependencySet.collector());
+    default Value compute(Context c, Parser.MJNode node, List<Value> arguments){
+        return compute(c, arguments);
     }
 
     public String toString(List<Value> arguments);

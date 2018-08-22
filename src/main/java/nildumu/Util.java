@@ -61,9 +61,11 @@ public class Util {
 
     public static String toBinaryString(int num){
         List<Boolean> vals = new ArrayList<>();
-        int numAbs = Math.abs(num);
+        int numAbs = num;
+        if (num < 0){
+            numAbs = Math.abs(num) - 1;
+        }
         boolean one = num >= 0;
-        vals.add(!one);
         while (numAbs > 0){
             if (numAbs % 2 == 0){
                 vals.add(!one);
@@ -72,9 +74,10 @@ public class Util {
             }
             numAbs = numAbs / 2;
         }
-        if (vals.size() == 1){
-            vals.add(!one);
+        if (vals.isEmpty()){
+            vals.add(0, !one);
         }
+        vals.add(!one);
         Collections.reverse(vals);
         return vals.stream().map(b -> b ? "1" : "0").collect(Collectors.joining(""));
     }
