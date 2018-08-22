@@ -1,6 +1,8 @@
 package nildumu;
 
+import java.net.ContentHandler;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -9,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -36,10 +39,24 @@ import static nildumu.Parser.process;
  */
 public class Context {
 
+    public static enum Mode {
+        BASIC,
+        EXTENDED;
+
+        @Override
+        public String toString() {
+            return name().toLowerCase().replace("_", " ");
+        }
+    }
+
     public static class NotAnInputBit extends NildumuError {
         NotAnInputBit(Bit offendingBit, String reason){
             super(String.format("%s is not an input bit: %s", offendingBit.repr(), reason));
         }
+    }
+
+    public static @FunctionalInterface interface ModsCreator {
+        public Mods apply(Context context, Bit bit, Bit assumedValue);
     }
 
     public final SecurityLattice<?> sl;
@@ -92,6 +109,27 @@ public class Context {
             return ValueLattice.get().bot();
         }
     }, FORBID_DELETIONS);
+
+    private final DefaultMap<Bit, ModsCreator> replMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, ModsCreator>() {
+        @Override
+        public ModsCreator defaultValue(Map<Bit, ModsCreator> map, Bit key) {
+            return ((c, b, a) -> choose(b, a) == a ? new Mods(b, a) : Mods.empty());
+        }
+    });
+
+    private final DefaultMap<Bit, Integer> c1LeakageMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, Integer>() {
+        @Override
+        public Integer defaultValue(Map<Bit, Integer> map, Bit key) {
+            if (isInputBit(key) && sec(key) != sl.bot()){
+                return 1;
+            }
+            return key.deps.stream().filter(Bit::isUnknown).mapToInt(c1LeakageMap::get).sum();
+        }
+    });
+
+    private Mode mode;
+
+    public final Stack<Mods> modsStack = new Stack<>();
 
     public Context(SecurityLattice sl) {
         this.sl = sl;
@@ -182,7 +220,7 @@ public class Context {
 
     public Value evaluate(MJNode node){
         System.out.println("Evaluate node " + node);
-        List<Value> args = paramNode(node).stream().map(this::nodeValue).collect(Collectors.toList());
+        List<Value> args = paramNode(node).stream().map(this::nodeValue).map(this::replace).collect(Collectors.toList());
         Value newValue = op(node, args);
         nodeValue(node, newValue);
         newValue.description(node.getTextualId()).node(node);
@@ -279,5 +317,89 @@ public class Context {
             variables.addAll(variableStates.get(i).variableNames());
         }
         return variables;
+    }
+
+    public void pushMods(Bit condBit, Bit assumedValue){
+        if (inExtendedMode()){
+            modsStack.push(repl(condBit).apply(this, condBit, assumedValue));
+        }
+    }
+
+    public void popMods(){
+        if (inExtendedMode()) {
+            modsStack.pop();
+        }
+    }
+
+    public boolean inExtendedMode(){
+        return mode == Mode.EXTENDED;
+    }
+
+    public Bit replace(Bit bit){
+        if (inExtendedMode()) {
+            for (int i = modsStack.size() - 1; i >= 0; i--){
+                Mods cur = modsStack.get(i);
+                if (cur.definedFor(bit)){
+                    return cur.replace(bit);
+                }
+            }
+        }
+        return bit;
+    }
+
+    public Value replace(Value value) {
+        Util.Box<Boolean> replacedABit = new Util.Box<>(false);
+        Value newValue = value.stream().map(b -> {
+            Bit r = replace(b);
+            if (r != b){
+                replacedABit.val = true;
+            }
+            return r;
+        }).collect(Value.collector());
+        if (replacedABit.val){
+            return newValue;
+        }
+        return value;
+    }
+
+    public void repl(Bit bit, ModsCreator modsCreator){
+        replMap.put(bit, modsCreator);
+    }
+
+    /**
+     * Applies the repl function to get mods
+     * @param bit
+     * @param assumed
+     */
+    public Mods repl(Bit bit, Bit assumed){
+        return repl(bit).apply(this, bit, assumed);
+    }
+
+    public ModsCreator repl(Bit bit){
+        return replMap.get(bit);
+    }
+
+    public int c1(Bit bit){
+        return c1LeakageMap.get(bit);
+    }
+
+    public Bit choose(Bit a, Bit b){
+        if (c1(a) <= c1(b) || a.isConstant()){
+            return a;
+        }
+        return b;
+    }
+
+    public Bit notChosen(Bit a, Bit b){
+        if (choose(a, b) == b){
+            return a;
+        }
+        return b;
+    }
+
+    public Context mode(Mode mode){
+        assert this.mode == null;
+        this.mode = mode;
+        return this;
     }
 }

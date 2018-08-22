@@ -18,6 +18,7 @@ import java.util.stream.Stream;
 import static nildumu.Lattices.B.ONE;
 import static nildumu.Lattices.B.U;
 import static nildumu.Lattices.B.X;
+import static nildumu.Lattices.B.ZERO;
 import static nildumu.Util.*;
 
 /**
@@ -555,6 +556,17 @@ public class Lattices {
         public B lattice() {
             return X;
         }
+
+        public B neg(){
+            switch (this){
+                case ZERO:
+                    return ONE;
+                case ONE:
+                    return ZERO;
+                default:
+                    return this;
+            }
+        }
     }
 
     public static class DependencySet extends HashSet<Bit> {
@@ -600,6 +612,11 @@ public class Lattices {
 
         public static Collector<Bit, ?, DependencySet> collector(){
             return Collectors.collectingAndThen(Collectors.toList(), DependencySet::new);
+        }
+
+        public Bit getSingleBit(){
+            assert size() == 1;
+            return iterator().next();
         }
     }
 
@@ -787,6 +804,9 @@ public class Lattices {
                 }
                 return String.format("(%s, %s, %s)", bs.toString(val), ds.toString(dataDeps), ds.toString(controlDeps));
             }*/
+            if (valueIndex == 0){
+                return val.toString();
+            }
             return String.format("%s[%d]%s", value == null ? "" : (value.node() == null ? value.description() : value.node().getTextualId()), valueIndex, val);
         }
 
@@ -1130,6 +1150,14 @@ public class Lattices {
             List<Bit> reversedBits = new ArrayList<>(bits);
             Collections.reverse(reversedBits);
             return "0b" + reversedBits.stream().map(b -> b.val.toString()).collect(Collectors.joining(""));
+        }
+
+        public boolean isNegative(){
+            return signBit().val == ONE;
+        }
+
+        public boolean isNonNegative(){
+            return signBit().val == ZERO;
         }
     }
 

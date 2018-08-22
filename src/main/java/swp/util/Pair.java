@@ -34,4 +34,9 @@ public class Pair<T, V> implements Serializable {
 	public Stream<T> firstStream(){
 		return Stream.of(first);
 	}
+
+	@Override
+	public String toString() {
+		return String.format("(%s,%s)", first, second);
+	}
 }

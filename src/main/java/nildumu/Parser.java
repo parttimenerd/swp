@@ -2184,6 +2184,11 @@ public class Parser implements Serializable {
         }
 
         @Override
+        public String getTextualId() {
+            return toString();
+        }
+
+        @Override
         public <R> R accept(ExpressionVisitor<R> visitor) {
             return visitor.visit(this);
         }

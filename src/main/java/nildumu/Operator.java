@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 import swp.util.Pair;
 
 import static nildumu.Context.c;
+import static nildumu.Context.v;
 import static nildumu.Lattices.*;
 import static nildumu.Lattices.B.ONE;
 import static nildumu.Lattices.B.U;
@@ -214,6 +215,63 @@ public interface Operator {
     }
 
     /**
+     * Important: the {@link StructuredModsCreator#apply(Context, Bit, Bit)}
+     * adds the default bit modification for the own bit to all computed modifications, except for the unused
+     * case.
+     */
+    static interface StructuredModsCreator extends Context.ModsCreator {
+
+        default Mods apply(Context c, Bit r, Bit a) {
+            if (r.isConstant()){
+                return Mods.empty();
+            }
+            Mods mods = null;
+            switch (a.val) {
+                case ONE:
+                    mods = assumeOne(c, r, a);
+                    break;
+                case ZERO:
+                    mods = assumeZero(c, r, a);
+                    break;
+                case U:
+                    mods = assumeUnknown(c, r, a);
+                    break;
+                case X:
+                    return assumeUnused(c, r, a);
+            }
+            return mods.add(defaultOwnBitMod(c, r, a));
+        }
+
+        /**
+         * Assume that <code>a</code> is one
+         */
+        Mods assumeOne(Context c, Bit r, Bit a);
+
+        /**
+         * Assume that <code>a</code> is zero
+         */
+        Mods assumeZero(Context c, Bit r, Bit a);
+
+        /**
+         * Assume that <code>a</code> is u
+         */
+        default Mods assumeUnknown(Context c, Bit r, Bit a) {
+            return Mods.empty();
+        }
+
+        default Mods defaultOwnBitMod(Context c, Bit r, Bit a) {
+            if (r.isConstant() || c.choose(r, a) == r){
+                return Mods.empty();
+            }
+            return new Mods(r, a);
+        }
+
+        default Mods assumeUnused(Context c, Bit r, Bit a) {
+            return Mods.empty();
+        }
+    }
+
+    /**
      * A bit wise operator that uses a preset computation structure. Computation steps:
      *operatorPerNode
      * <ol>
@@ -236,7 +294,9 @@ public interface Operator {
             }
             DependencySet dataDeps = computeDataDependencies(x, y, bitValue);
             DependencySet controlDeps = computeControlDeps(c, currentNode, bitValue, dataDeps);
-            return new Bit(bitValue, dataDeps, controlDeps);
+            Bit r = new Bit(bitValue, dataDeps, controlDeps);
+            c.repl(r, computeModificator(x, y, r, dataDeps));
+            return r;
         }
 
         abstract B computeBitValue(Bit x, Bit y);
@@ -246,6 +306,8 @@ public interface Operator {
         DependencySet computeControlDeps(Context c, Parser.MJNode node, Lattices.B computedBitValue, DependencySet computedDataDeps) {
             return DependencySetLattice.get().bot();
         }
+
+        abstract Context.ModsCreator computeModificator(Bit x, Bit y, Bit r, DependencySet dataDeps);
     }
 
     public static abstract class BitWiseOperator implements Operator {
@@ -296,7 +358,9 @@ public interface Operator {
             }
             DependencySet dataDeps = computeDataDependencies(bits, bitValue);
             DependencySet controlDeps = computeControlDeps(c, currentNode, bitValue, dataDeps);
-            return new Bit(bitValue, dataDeps, controlDeps);
+            Bit r = new Bit(bitValue, dataDeps, controlDeps);
+            c.repl(r, computeModsCreator(r, dataDeps));
+            return r;
         }
 
         abstract B computeBitValue(List<Bit> bits);
@@ -306,6 +370,8 @@ public interface Operator {
         DependencySet computeControlDeps(Context c, Parser.MJNode node, Lattices.B computedBitValue, DependencySet computedDataDeps) {
             return DependencySetLattice.get().bot();
         }
+
+        abstract Context.ModsCreator computeModsCreator(Bit r, DependencySet dataDeps);
     }
 
     public static abstract class BinaryOperatorStructured extends BinaryOperator {
@@ -324,7 +390,9 @@ public interface Operator {
                     if (bitValues.get(i).isConstant()){
                         bits.add(new Bit(bitValues.get(i)));
                     } else {
-                        bits.add(new Bit(bitValues.get(i), dataDeps.get(i), DependencySetLattice.get().bot()));
+                        Bit r = new Bit(bitValues.get(i), dataDeps.get(i), DependencySetLattice.get().bot());
+                        bits.add(r);
+                        c.repl(r, computeModsCreator(i + 1, r, x, y, bitValues, dataDeps.get(i)));
                     }
                 }
                 return new Value(bits);
@@ -349,6 +417,7 @@ public interface Operator {
 
         abstract DependencySet computeDataDependencies(int i, Value x, Value y, List<B> computedBitValues);
 
+        abstract Context.ModsCreator computeModsCreator(int i, Bit r, Value x, Value y, List<B> bitValues, DependencySet dataDeps);
     }
 
     /**
@@ -373,6 +442,27 @@ public interface Operator {
                     .filter(p -> p.first.val == U && p.second.val != ONE)
                     .flatMap(Pair::firstStream).collect(DependencySet.collector());
         }
+
+        @Override
+        Context.ModsCreator computeModificator(Bit x, Bit y, Bit r, DependencySet dataDeps) {
+            return new StructuredModsCreator() {
+                @Override
+                public Mods assumeOne(Context c, Bit r, Bit a) {
+                    if (v(y) == ZERO) {
+                        return c.repl(x, a);
+                    }
+                    if (v(x) == ZERO){
+                        return c.repl(y, a);
+                    }
+                    return Mods.empty();
+                }
+
+                @Override
+                public Mods assumeZero(Context c, Bit r, Bit a) {
+                    return c.repl(x, a).add(c.repl(y, a));
+                }
+            };
+        }
     };
 
     static final BitWiseBinaryOperatorStructured AND = new BitWiseBinaryOperatorStructured("&") {
@@ -394,9 +484,30 @@ public interface Operator {
                     .filter(p -> p.first.val == U && p.second.val != ZERO)
                     .flatMap(Pair::firstStream).collect(DependencySet.collector());
         }
+
+        @Override
+        Context.ModsCreator computeModificator(Bit x, Bit y, Bit r, DependencySet dataDeps) {
+            return new StructuredModsCreator() {
+                @Override
+                public Mods assumeZero(Context c, Bit r, Bit a) {
+                    if (v(y) == ONE) {
+                        return c.repl(x, a);
+                    }
+                    if (v(x) == ONE){
+                        return c.repl(y, a);
+                    }
+                    return Mods.empty();
+                }
+
+                @Override
+                public Mods assumeOne(Context c, Bit r, Bit a) {
+                    return c.repl(x, a).add(c.repl(y, a));
+                }
+            };
+        }
     };
 
-    static final BitWiseBinaryOperatorStructured XOR = new BitWiseBinaryOperatorStructured("^") {
+    static final BitWiseBinaryOperator XOR = new BitWiseBinaryOperatorStructured("^") {
 
         @Override
         public B computeBitValue(Bit x, Bit y) {
@@ -415,12 +526,62 @@ public interface Operator {
                     .filter(p -> p.first.val == U)
                     .flatMap(Pair::firstStream).collect(DependencySet.collector());
         }
+
+        @Override
+        Context.ModsCreator computeModificator(Bit x, Bit y, Bit r, DependencySet dataDeps) {
+            return new StructuredModsCreator() {
+                @Override
+                public Mods assumeOne(Context c, Bit r, Bit a) {
+                    return assumeOnePart(c, x, y).add(assumeOnePart(c, y, x));
+                }
+
+                @Override
+                public Mods assumeZero(Context c, Bit r, Bit a) {
+                    return assumeZeroPart(c, x, y).add(assumeZeroPart(c, y, x));
+                }
+
+                Mods assumeOnePart(Context c, Bit alpha, Bit beta){
+                    if (beta.isConstant()){
+                        return c.repl(alpha, new Bit(v(beta).neg()));
+                    }
+                    return Mods.empty();
+                }
+
+                Mods assumeZeroPart(Context c, Bit alpha, Bit beta){
+                    if (beta.isConstant()){
+                        return c.repl(alpha, beta);
+                    }
+                    return Mods.empty();
+                }
+            };
+        }
     };
 
     static final UnaryOperator NOT = new UnaryOperator("~") {
         @Override
-        public Value compute(Context c, Value val) {
-            return XOR.compute(c, val, new Value(new Bit(ONE), new Bit(ONE)));
+        public Value compute(Context c, Value x) {
+            return x.stream().map(b -> {
+                B val = v(b).neg();
+                DependencySet dataDeps = b.isConstant() ? ds.bot() : new DependencySet(b);
+                Bit r = new Bit(val, dataDeps, ds.bot());
+                c.repl(r, new StructuredModsCreator() {
+                    @Override
+                    public Mods assumeOne(Context c, Bit r, Bit a) {
+                        return c.repl(b, new Bit(ZERO));
+                    }
+
+                    @Override
+                    public Mods assumeZero(Context c, Bit r, Bit a) {
+                        return c.repl(b, new Bit(ONE));
+                    }
+
+                    @Override
+                    public Mods assumeUnused(Context c, Bit r, Bit a) {
+                        return c.repl(b, a);
+                    }
+                });
+                return r;
+            }).collect(Value.collector());
         }
     };
 
@@ -447,6 +608,29 @@ public interface Operator {
             return Stream.concat(x.stream().filter(b -> b.val == U),
                     y.stream().filter(b -> b.val == U)).collect(DependencySet.collector());
         }
+
+        @Override
+        Context.ModsCreator computeModsCreator(int i, Bit r, Value x, Value y, List<B> bitValues, DependencySet dataDeps) {
+            if (i > 1){
+                return (c, b, a) -> Mods.empty();
+            }
+            return new StructuredModsCreator() {
+                @Override
+                public Mods assumeOne(Context c, Bit r, Bit a) {
+                    if (i != 1){
+                        return Mods.empty();
+                    }
+                    Mods mods = Mods.empty();
+                    vl.mapBits(x, y, (xi, yi) -> c.repl(c.notChosen(xi, yi), c.choose(xi, yi))).forEach(mods::add);
+                    return mods;
+                }
+
+                @Override
+                public Mods assumeZero(Context c, Bit r, Bit a) {
+                    return Mods.empty();
+                }
+            };
+        }
     };
 
     static final BinaryOperator UNEQUALS = new BinaryOperatorStructured("!=") {
@@ -472,6 +656,29 @@ public interface Operator {
             }
             return Stream.concat(x.stream().filter(b -> b.val == U),
                     y.stream().filter(b -> b.val == U)).collect(DependencySet.collector());
+        }
+
+        @Override
+        Context.ModsCreator computeModsCreator(int i, Bit r, Value x, Value y, List<B> bitValues, DependencySet dataDeps) {
+            if (i > 1){
+                return (c, b, a) -> Mods.empty();
+            }
+            return new StructuredModsCreator() {
+                @Override
+                public Mods assumeZero(Context c, Bit r, Bit a) {
+                    if (i != 1){
+                        return Mods.empty();
+                    }
+                    Mods mods = Mods.empty();
+                    vl.mapBits(x, y, (xi, yi) -> c.repl(c.notChosen(xi, yi), c.choose(xi, yi))).forEach(mods::add);
+                    return mods;
+                }
+
+                @Override
+                public Mods assumeOne(Context c, Bit r, Bit a) {
+                    return Mods.empty();
+                }
+            };
         }
     };
 
@@ -515,7 +722,7 @@ public interface Operator {
             while (j >= 1 && pred.test(x.get(j).val, y.get(j).val)) {
                 j--;
             }
-            if (j >= 1) {
+            if (j > 1) {
                 return Optional.of(j);
             }
             return Optional.empty();
@@ -525,6 +732,16 @@ public interface Operator {
             return Arrays.stream(values).flatMap(value -> value.getRange(range)).filter(Bit::isUnknown).collect(Collectors.toSet());
         }
 
+        IntStream indexesWithBitValue(Value value, B b){
+            IntStream.Builder ints = IntStream.builder();
+            int j = value.size() - 1;
+            while (j > 1 && value.get(j).val == b) {
+                ints.add(j);
+                j--;
+            }
+            return ints.build();
+        }
+
         @Override
         public DependencySet computeDataDependencies(int i, Value x, Value y, List<Lattices.B> computedBitValues) {
             if (i > 0 || computedBitValues.get(0).isConstant()) {
@@ -532,9 +749,39 @@ public interface Operator {
             }
             return dependentBits.pop();
         }
+
+        @Override
+        Context.ModsCreator computeModsCreator(int i, Bit r, Value x, Value y, List<B> bitValues, DependencySet dataDeps) {
+            if (i > 1){
+                return (c, b, a) -> Mods.empty();
+            }
+            return new StructuredModsCreator() {
+                @Override
+                public Mods assumeOne(Context c, Bit r, Bit a) { // x < y
+                    if (y.isNonNegative()){ // x < y && 0 <= y => x is upper bounded by y
+                        return indexesWithBitValue(y, ZERO).mapToObj(x::get).map(xi -> c.repl(xi, new Bit(ZERO))).collect(Mods.collector());
+                    }
+                    if (y.isNegative()){ // x < y < 0 => x is negative too
+                        return c.repl(x.signBit(), new Bit(ONE));
+                    }
+                    return Mods.empty();
+                }
+
+                @Override
+                public Mods assumeZero(Context c, Bit r, Bit a) { // x >= y
+                    if (x.isNonNegative()){ // y <= x && 0 <= x => y is upper bounded by x
+                        return indexesWithBitValue(y, ZERO).mapToObj(y::get).map(yi -> c.repl(yi, new Bit(ZERO))).collect(Mods.collector());
+                    }
+                    if (x.isNegative()){ // y <= x < 0 => y is negative too
+                        return c.repl(y.signBit(), new Bit(ONE));
+                    }
+                    return Mods.empty();
+                }
+            };
+        }
     };
 
-    static final BitWiseBinaryOperator PHI = new BitWiseBinaryOperatorStructured("phi") {
+    static final BitWiseBinaryOperatorStructured PHI = new BitWiseBinaryOperatorStructured("phi") {
         @Override
         public Lattices.B computeBitValue(Bit x, Bit y) {
             return bs.sup(x.val, y.val);
@@ -552,6 +799,28 @@ public interface Operator {
                 return ((Parser.PhiNode) node).controlDeps.stream().map(n -> context.nodeValue(n).get(1)).collect(DependencySet.collector());
             }
             return DependencySetLattice.get().bot();
+        }
+
+        @Override
+        Context.ModsCreator computeModificator(Bit x, Bit y, Bit r, DependencySet dataDeps) {
+            return new StructuredModsCreator() {
+                @Override
+                public Mods assumeOne(Context c, Bit r, Bit a) {
+                    return comp(c, a);
+                }
+
+                @Override
+                public Mods assumeZero(Context c, Bit r, Bit a) {
+                    return comp(c, a);
+                }
+
+                public Mods comp(Context c, Bit a){
+                    if (dataDeps.size() == 1){
+                        return c.repl(dataDeps.getSingleBit(), a);
+                    }
+                    return Mods.empty();
+                }
+            };
         }
     };
 
@@ -575,6 +844,13 @@ public interface Operator {
             }
             return DependencySetLattice.get().bot();
         }
+
+        @Override
+        Context.ModsCreator computeModsCreator(Bit r, DependencySet dataDeps) {
+            return PHI.computeModificator(null, null, r, dataDeps);
+        }
+
+
     };
 
     /**

@@ -48,6 +48,7 @@ import nildumu.NildumuError;
 import nildumu.Parser;
 import nildumu.Processor;
 import nildumu.PythonCaller;
+import nildumu.ResponsiveTimer;
 import swp.LocatedSWPException;
 import swp.lexer.Location;
 import swp.util.ParserError;
@@ -75,12 +76,11 @@ public class BasicUI {
     private JScrollPane variableValueScrollPane;
     private JTable variableValueTable;
     private JButton storeJsonButton;
+    private JComboBox modeComboBox;
     private Context context = null;
     private DocumentListener documentListener;
-    private boolean requestedGraphViewUpdate = false;
-    private Timer timer;
-    private long refreshInterval = 10;
-    private long refreshMsCounter = 10;
+    private ResponsiveTimer graphViewRefreshTimer;
+    private ResponsiveTimer processRefreshTimer;
     private Object syntaxErrorHighlightTag = null;
     private Object nodeSelectHighlightTag = null;
     private boolean inComboxBoxHandler = false;
@@ -89,17 +89,19 @@ public class BasicUI {
         documentListener = new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
-                processAndUpdate(inputArea.getText());
+                if (processRefreshTimer != null) {
+                    processRefreshTimer.request();
+                }
             }
 
             @Override
             public void removeUpdate(DocumentEvent e) {
-                processAndUpdate(inputArea.getText());
+                insertUpdate(e);
             }
 
             @Override
             public void changedUpdate(DocumentEvent e) {
-                processAndUpdate(inputArea.getText());
+                insertUpdate(e);
             }
         };
         inputArea.getDocument().addDocumentListener(documentListener);
@@ -119,31 +121,27 @@ public class BasicUI {
         CompletionProvider provider = createCompletionProvider();
         AutoCompletion ac = new AutoCompletion(provider);
         ac.install(inputArea);
-        timer = new Timer();
-        timer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                if (refreshMsCounter > 0) {
-                    refreshMsCounter -= 10;
-                    return;
-                }
-                if (requestedGraphViewUpdate) {
-                    requestedGraphViewUpdate = false;
-                    long start = System.currentTimeMillis();
-                    updateGraphView();
-                    System.out.println(refreshInterval);
-                    refreshInterval = System.currentTimeMillis() - start;
-                }
-                refreshMsCounter = refreshInterval;
-            }
-        }, 10, 10);
+
+        for (Context.Mode mode : Context.Mode.values()) {
+            modeComboBox.addItem(mode);
+        }
+        modeComboBox.setSelectedItem(Context.Mode.valueOf(getVarContent("examples/lastMode", Context.Mode.BASIC.name())));
+        modeComboBox.addActionListener(a -> {
+            Context.Mode mode = (Context.Mode) modeComboBox.getSelectedItem();
+            storeVarInFile("examples/lastMode", mode.name());
+            processRefreshTimer.request();
+        });
+        graphViewRefreshTimer = new ResponsiveTimer(() -> updateGraphView());
+        graphViewRefreshTimer.start();
+        processRefreshTimer = new ResponsiveTimer(() -> processAndUpdate(inputArea.getText()));
+        processRefreshTimer.start();
         automaticRedrawCheckBox.addChangeListener(new ChangeListener() {
             @Override
             public void stateChanged(ChangeEvent e) {
                 if (automaticRedrawCheckBox.isSelected()) {
-                    refreshMsCounter = 10;
+                    graphViewRefreshTimer.restart();
                 } else {
-                    refreshMsCounter = Long.MAX_VALUE;
+                    graphViewRefreshTimer.stop();
                 }
             }
         });
@@ -203,7 +201,7 @@ public class BasicUI {
             inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
         }
         try {
-            Context c = Processor.process(program);
+            Context c = Processor.process(program, (Context.Mode) modeComboBox.getSelectedItem());
             if (context == null || c.sl != context.sl) {
                 context = c;
                 updateSecLattice();
@@ -213,7 +211,7 @@ public class BasicUI {
             updateNodeValueTable(context);
             updateVariableValueTable(context);
             ssaArea.setText(Parser.process(program).toPrettyString());
-            requestedGraphViewUpdate = true;
+            graphViewRefreshTimer.request();
         } catch (LocatedSWPException e) {
             parserErrorLabel.setText(e.getMessage());
             Location errorLocation = e.errorToken.location;
@@ -347,25 +345,27 @@ public class BasicUI {
         storeButton.setText("store");
         panel4.add(storeButton, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         final JPanel panel5 = new JPanel();
-        panel5.setLayout(new GridLayoutManager(2, 5, new Insets(0, 0, 0, 0), -1, -1));
+        panel5.setLayout(new GridLayoutManager(2, 6, new Insets(0, 0, 0, 0), -1, -1));
         splitPane1.setRightComponent(panel5);
         jungPanel = new JungPanel();
-        panel5.add(jungPanel, new GridConstraints(0, 0, 1, 5, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(2000, 2000), null, 0, false));
+        panel5.add(jungPanel, new GridConstraints(0, 0, 1, 6, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(2000, 2000), null, 0, false));
         attackerSecLevelInput = new JComboBox();
-        panel5.add(attackerSecLevelInput, new GridConstraints(1, 4, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(50, -1), null, 0, false));
+        panel5.add(attackerSecLevelInput, new GridConstraints(1, 5, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(50, -1), null, 0, false));
         resetButton = new JButton();
         resetButton.setText("reset");
-        panel5.add(resetButton, new GridConstraints(1, 3, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel5.add(resetButton, new GridConstraints(1, 4, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         automaticRedrawCheckBox = new JCheckBox();
         automaticRedrawCheckBox.setSelected(true);
         automaticRedrawCheckBox.setText("Redraw automatically");
         panel5.add(automaticRedrawCheckBox, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         redrawButton = new JButton();
         redrawButton.setText("Redraw");
-        panel5.add(redrawButton, new GridConstraints(1, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel5.add(redrawButton, new GridConstraints(1, 3, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         storeJsonButton = new JButton();
         storeJsonButton.setText("Store json");
-        panel5.add(storeJsonButton, new GridConstraints(1, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel5.add(storeJsonButton, new GridConstraints(1, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        modeComboBox = new JComboBox();
+        panel5.add(modeComboBox, new GridConstraints(1, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         parserErrorLabel = new JLabel();
         parserErrorLabel.setText("Label");
         panel1.add(parserErrorLabel, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
@@ -533,7 +533,7 @@ public class BasicUI {
     private void setProgram(String program) {
         inputArea.getDocument().removeDocumentListener(documentListener);
         inputArea.setText(program);
-        processAndUpdate(program);
+        processRefreshTimer.request();
         inputArea.getDocument().addDocumentListener(documentListener);
     }
 
@@ -567,7 +567,7 @@ public class BasicUI {
                 "basic"
         ).forEach(a -> provider.addCompletion(new BasicCompletion(provider, a)));
 
-        Arrays.asList(p("hi", "h input"), p("lo", "l output"), p("diamond", "use_sec diamond;")).forEach(p -> provider.addCompletion(new ShorthandCompletion(provider, p.first, p.second)));
+        Arrays.asList(p("hi", "h input int"), p("lo", "l output int"), p("diamond", "use_sec diamond;")).forEach(p -> provider.addCompletion(new ShorthandCompletion(provider, p.first, p.second)));
 
         return provider;
     }
