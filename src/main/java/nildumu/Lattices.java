@@ -696,7 +696,7 @@ public class Lattices {
         public void walkTopologicalOrder(Bit startBit, Consumer<Bit> consumer, Predicate<Bit> ignoreBit){
             List<Bit> bits = new ArrayList<>();
             walkBits(startBit, bits::add, ignoreBit);
-            for (int i = bits.size() - 1; i >= 0; i++){
+            for (int i = bits.size() - 1; i >= 0; i--){
                 consumer.accept(bits.get(i));
             }
         }

@@ -12,8 +12,8 @@ import swp.util.Pair;
 import static nildumu.Lattices.BasicSecLattice.HIGH;
 import static nildumu.Lattices.BasicSecLattice.LOW;
 import static nildumu.Util.*;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for all the basic lattices. These lattices are the foundation of the whole analysis, they should
@@ -82,8 +82,7 @@ public class LatticesTest {
     final <T> void assertParsingCorrect(Lattices.Lattice<T> lattice, BiPredicate<T, T> eq, Pair<String, T>... pairs){
         for (Pair<String, T> pair : pairs) {
             T actual = lattice.parse(pair.first);
-            assertTrue(String.format("Expected '%s', got '%s'", lattice.toString(pair.second), lattice.toString(actual)),
-                    eq.test(actual, pair.second));
+            assertTrue(eq.test(actual, pair.second), String.format("Expected '%s', got '%s'", lattice.toString(pair.second), lattice.toString(actual)));
         }
     }
 

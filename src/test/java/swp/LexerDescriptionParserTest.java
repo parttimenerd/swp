@@ -10,9 +10,9 @@ import swp.lexer.automata.AutomatonLexer;
 import swp.lexer.automata.LexerDescriptionParser;
 import swp.lexer.automata.Table;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.testng.AssertJUnit.assertTrue;
-import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LexerDescriptionParserTest {
 
@@ -115,18 +115,18 @@ public class LexerDescriptionParserTest {
 		try {
 			createLexer(lexerGrammar, "");
 		} catch (Error error){
-			assertTrue(String.format("The lexer grammar \"%s\" isn't valid", lexerGrammar), true);
+			assertTrue(true, String.format("The lexer grammar \"%s\" isn't valid", lexerGrammar));
 		}
-		assertTrue(String.format("The lexer grammar \"%s\" is valid, but it shouldn't", lexerGrammar), true);
+		assertTrue(true, String.format("The lexer grammar \"%s\" is valid, but it shouldn't", lexerGrammar));
 	}
 
 	public void checkValidLexerGrammar(String lexerGrammar){
 		try {
 			createLexer(lexerGrammar, "");
 		} catch (Error error){
-			assertTrue(String.format("The lexer grammar \"%s\" isn't valid, but it should: %s", lexerGrammar, error.toString()), false);
+			assertTrue(false, String.format("The lexer grammar \"%s\" isn't valid, but it should: %s", lexerGrammar, error.toString()));
 		}
-		assertTrue(String.format("The lexer grammar \"%s\" is valid", lexerGrammar), true);
+		assertTrue(true, String.format("The lexer grammar \"%s\" is valid", lexerGrammar));
 	}
 
 	public void checkUnlexable(String lexerGrammar, String input){
@@ -138,11 +138,11 @@ public class LexerDescriptionParserTest {
 				gotTokens.add(lexer.cur().toSimpleString());
 			} while (lexer.cur().type != 0);
 		} catch (Error error) {
-			assertTrue(String.format("Lexing \"%s\" with \"%s\" isn't possible", input, lexerGrammar), true);
+			assertTrue(true, String.format("Lexing \"%s\" with \"%s\" isn't possible", input, lexerGrammar));
 			return;
 		}
 		toImage(lexerGrammar, "checkUnlexable");
-		assertTrue(String.format("Lexing \"%s\" with \"%s\" shoudn't be possible, lexed: %s", input, lexerGrammar, String.join(" ", gotTokens)), false);
+		assertTrue(false, String.format("Lexing \"%s\" with \"%s\" shoudn't be possible, lexed: %s", input, lexerGrammar, String.join(" ", gotTokens)));
 	}
 
 	private void toImage(String lexerGrammar, String name){
@@ -161,7 +161,7 @@ public class LexerDescriptionParserTest {
 				Lexer lex = new AutomatonLexer(table, expectedTokenTypes[i], new int[]{' '});
 				assertEquals(String.format("Lexing \"%s\" with \"%s\"", expectedTokenTypes[i], lexerGrammar), expectedTokenTypes[i + 1] + " EOF", formatLexerTokens(lex));
 			} catch (Error error){
-				assertTrue(String.format("Unexpected error occured while lexing \"%s\" with \"%s\": %s", expectedTokenTypes[i], lexerGrammar, error.toString()), true);
+				assertTrue(true, String.format("Unexpected error occured while lexing \"%s\" with \"%s\": %s", expectedTokenTypes[i], lexerGrammar, error.toString()));
 			}
 		}
 	}
@@ -175,7 +175,7 @@ public class LexerDescriptionParserTest {
 				gotTokens.add(lexer.cur().toSimpleString());
 			}
 		} while (lexer.cur().type != 0);
-		assertArrayEquals(String.format("Lexing \"%s\" with \"%s\"", input, lexerGrammar), expectedTokenTypes, gotTokens.toArray(new String[]{}));
+		assertArrayEquals(expectedTokenTypes, gotTokens.toArray(new String[]{}), String.format("Lexing \"%s\" with \"%s\"", input, lexerGrammar));
 	}
 
 	private String formatLexerTokens(Lexer lexer){

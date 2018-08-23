@@ -66,8 +66,15 @@ public class PythonCaller {
                 bitRules.add(String.format("\"%s\": [%s]", bit, toJson(rule(bit))));
             }, bit -> !bit.isUnknown());
             builder.append(String.join(",\n", bitRules));
-            builder.append(String.format("},\n\"high\":[%s], \n\"output\": [%s]\n}",
+            builder.append(String.format("},\n\"high\":[%s], \n\"output\": [%s],\n",
                     toJson(context.getInputBits(level)), toJson(context.getOutputBits(level))));
+            builder.append(String.format("\"weight\": {"));
+            List<String> weightStrs = new ArrayList<>();
+            context.walkBits(bit -> {
+                weightStrs.add(String.format("\"%s\": %s", bit, context.hasInfiniteWeight(bit) ? "inf" : context.weight(bit)));
+            }, bit -> !bit.isUnknown());
+            builder.append(String.join(",\n", weightStrs));
+            builder.append("}\n}");
             Files.write(path, Collections.singleton(builder));
             return path;
         } catch (IOException e) {

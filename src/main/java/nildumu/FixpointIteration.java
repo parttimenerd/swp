@@ -65,15 +65,20 @@ public class FixpointIteration {
             boolean somethingChanged = curNode.accept(nodeVisitor);
             if (somethingChanged || !visitedBefore.contains(curNode)) {
                 visitedBefore.add(curNode);
-                List<Parser.MJNode> nodesToAdd = curNode.children().stream().filter(c -> {
-                    if (statementNodesToOmitOneTime.contains(c)) {
-                        statementNodesToOmitOneTime.remove(c);
-                        return false;
-                    }
-                    return c instanceof Parser.MJNode && !(c instanceof Parser.ExpressionNode);
-                }).map(c -> (Parser.MJNode)c).collect(Collectors.toList());
-                Collections.reverse(nodesToAdd);
-                nodesToVisit.addAll(nodesToAdd);
+                if (curNode instanceof Parser.WhileStatementEndNode){
+                    nodesToVisit.add(((Parser.WhileStatementEndNode) curNode).whileStatement);
+                } else {
+                    List<Parser.MJNode> nodesToAdd = curNode.children().stream().filter(c -> {
+                        if (statementNodesToOmitOneTime.contains(c)) {
+                            statementNodesToOmitOneTime.remove(c);
+                            return false;
+                        }
+                        return c instanceof Parser.MJNode && !(c instanceof Parser.ExpressionNode);
+                    }).map(c -> (Parser.MJNode) c).collect(Collectors.toList());
+
+                    Collections.reverse(nodesToAdd);
+                    nodesToVisit.addAll(nodesToAdd);
+                }
             }
         }
     }

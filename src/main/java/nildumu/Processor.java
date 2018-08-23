@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Stack;
 
 import swp.util.Pair;
 
@@ -37,7 +38,21 @@ public class Processor {
             /**
              * conditional bits with their assumed value for each conditional statement body
              */
-            public Map<BlockNode, Pair<Bit, Bit>> conditionalBits = new HashMap<>();
+            Map<BlockNode, Pair<Bit, Bit>> conditionalBits = new HashMap<>();
+
+            int unfinishedLoopIterations = 0;
+
+            final Map<MJNode, Value> oldValues = new HashMap<>();
+
+            final Stack<Long> nodeValueUpdatesAtCondition = new Stack<>();
+
+            boolean didValueChangeAndUpdate(MJNode node, Value newValue){
+                if (oldValues.containsKey(node) && oldValues.get(node) == newValue){
+                    return false;
+                }
+                oldValues.put(node, newValue);
+                return true;
+            }
 
             @Override
             public Boolean visit(MJNode node) {
@@ -58,18 +73,22 @@ public class Processor {
             @Override
             public Boolean visit(IfStatementNode ifStatement) {
                 Value cond = context.nodeValue(ifStatement.conditionalExpression);
-                Lattices.B condVal = cond.get(1).val;
+                Bit condBit = cond.get(1);
+                Lattices.B condVal = condBit.val;
+                if (condVal == U && unfinishedLoopIterations > 0){
+                    context.weight(condBit, Context.INFTY);
+                }
                 if (condVal == ONE || condVal == U) {
-                    conditionalBits.put(ifStatement.ifBlock, new Pair<>(cond.get(1), new Bit(ONE)));
+                    conditionalBits.put(ifStatement.ifBlock, new Pair<>(condBit, new Bit(ONE)));
                 } else {
                     statementNodesToOmitOneTime.add(ifStatement.ifBlock);
                 }
                 if (condVal == ZERO || condVal == U) {
-                    conditionalBits.put(ifStatement.elseBlock, new Pair<>(cond.get(1), new Bit(ZERO)));
+                    conditionalBits.put(ifStatement.elseBlock, new Pair<>(condBit, new Bit(ZERO)));
                 } else {
                     statementNodesToOmitOneTime.add(ifStatement.elseBlock);
                 }
-                return false;
+                return didValueChangeAndUpdate(ifStatement, cond);
             }
 
             @Override
@@ -77,24 +96,43 @@ public class Processor {
                 if (conditionalBits.containsKey(block)){
                     Pair<Bit, Bit> bitPair = conditionalBits.get(block);
                     context.pushMods(bitPair.first, bitPair.second);
+                    nodeValueUpdatesAtCondition.push(context.getNodeValueUpdateCount());
                 }
                 return false;
             }
 
             @Override
             public Boolean visit(WhileStatementNode whileStatement) {
-                throw new NotImplementedException();
+                if (!context.inLoopMode()){
+                    throw new NildumuError("while-statements are only supported in modes starting at loop mode");
+                }
+                Value cond = context.nodeValue(whileStatement.conditionalExpression);
+                Bit condBit = cond.get(1);
+                Lattices.B condVal = condBit.val;
+                if (condVal == U){
+                    context.weight(condBit, Context.INFTY);
+                }
+                if (condVal == ONE || condVal == U) {
+                    conditionalBits.put(whileStatement.body, new Pair<>(condBit, new Bit(ONE)));
+                    unfinishedLoopIterations++;
+                } else {
+                    statementNodesToOmitOneTime.add(whileStatement.body);
+                }
+                nodeValueUpdatesAtCondition.push(context.getNodeValueUpdateCount());
+                return didValueChangeAndUpdate(whileStatement, cond);
             }
 
             @Override
             public Boolean visit(IfStatementEndNode ifEndStatement) {
                 context.popMods();
-                return false;
+                return nodeValueUpdatesAtCondition.pop() != context.getNodeValueUpdateCount();
             }
 
             @Override
             public Boolean visit(WhileStatementEndNode whileEndStatement) {
-                return false;
+                unfinishedLoopIterations--;
+                context.popMods();
+                return nodeValueUpdatesAtCondition.pop() != context.getNodeValueUpdateCount();
             }
 
         }, context::evaluate, node, statementNodesToOmitOneTime);

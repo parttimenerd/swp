@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -18,6 +19,7 @@ import edu.uci.ics.jung.graph.DirectedSparseGraph;
 import edu.uci.ics.jung.graph.util.EdgeType;
 import swp.util.Pair;
 
+import static nildumu.Context.INFTY;
 import static nildumu.Context.c;
 import static nildumu.Context.d;
 import static nildumu.Context.v;
@@ -67,7 +69,6 @@ public class LeakageCalculation {
                                     return new HashSet<>();
                                 }
                             },
-                            FORBID_VALUE_UPDATES,
                             FORBID_DELETIONS);
             Set<Bit> processedBits = new HashSet<>();
             for (Pair<Sec, Bit> secBitPair : context.output.getBits()) {
@@ -99,19 +100,22 @@ public class LeakageCalculation {
 
     /** A replacement rule for bits */
     public static class Rule {
+        public final boolean hasInfiniteStartWeight;
         public final Bit start;
         public final Set<Bit> replacements;
 
-        public Rule(Bit start, Set<Bit> replacements) {
+        public Rule(Bit start, Set<Bit> replacements, boolean hasInfiniteStartWeight) {
             this.start = start;
             this.replacements = replacements;
+            this.hasInfiniteStartWeight = hasInfiniteStartWeight;
         }
 
         @Override
         public String toString() {
             return String.format(
-                    "%s → %s",
+                    "%s%s → %s",
                     start,
+                    hasInfiniteStartWeight ? "∞": "",
                     replacements.stream().map(Bit::toString).sorted().collect(Collectors.joining(" ")));
         }
     }
@@ -227,6 +231,7 @@ public class LeakageCalculation {
             public final Node start;
             public final Node end;
             public final Bit bit;
+            public final int weight;
 
             /**
              * Inner bit edge
@@ -239,10 +244,16 @@ public class LeakageCalculation {
             }
 
             public Edge(Node start, Node end, Bit bit) {
+                this(start, end, bit, 1);
+            }
+
+            public Edge(Node start, Node end, Bit bit, int weight) {
                 this.start = start;
                 this.end = end;
                 this.bit = bit;
+                this.weight = weight;
             }
+
 
             public boolean isInnerBitEdge() {
                 return bit != null;
@@ -323,7 +334,7 @@ public class LeakageCalculation {
             for (Rule rule : rules.rules.values()) {
                 Bit start = rule.start;
                 for (Bit end : rule.replacements) {
-                    edges.add(new Edge(bitToNodes.get(start).second, bitToNodes.get(end).first));
+                    edges.add(new Edge(bitToNodes.get(start).second, bitToNodes.get(end).first, null, rule.hasInfiniteStartWeight ? INFTY : 1));
                 }
             }
             return new EdgeGraph(inputs, outputs, nodes, edges);
@@ -356,7 +367,7 @@ public class LeakageCalculation {
                                                     graph,
                                                     edgeGraph.outputAnchorNodes.get(key),
                                                     edgeGraph.inputAnchorNodes.get(key),
-                                                    e -> e.isInnerBitEdge() ? 1 : edgeGraph.edges.size(),
+                                                    e -> e.isInnerBitEdge() && e.weight != INFTY ? 1 : edgeGraph.edges.size(),
                                                     new HashMap<>(),
                                                     () -> new EdgeGraph.Edge(null, null));
                                     karp.evaluate();
@@ -429,7 +440,11 @@ public class LeakageCalculation {
         public final VisuNode input;
         public final VisuNode output;
 
-        public JungGraph(Rules rules, Sec<?> sec, Set<Bit> minCutBits) {
+        public JungGraph(Context context, Rules rules, Sec<?> sec, Set<Bit> minCutBits) {
+            this(context, rules, sec, minCutBits, false);
+        }
+
+        public JungGraph(Context context, Rules rules, Sec<?> sec, Set<Bit> minCutBits, boolean excludeUnimportantBits) {
             graph = new DirectedSparseGraph<>();
             List<Node> nodes = new ArrayList<>();
             List<Edge> edges = new ArrayList<>();
@@ -450,9 +465,18 @@ public class LeakageCalculation {
             Set<Bit> excludedInputBits = new HashSet<>(rules.inputAnchorBits.values());
             excludedInputBits.remove(rules.inputAnchorBits.get(sec));
             excludedOutputBits.remove(rules.outputAnchorBits.get(sec));
+
+            Predicate<Bit> ignoreBit = b -> false;
+
+            if (excludeUnimportantBits){
+                DependencyStorage storage = DependencyStorage.get(context);
+                SecurityLattice<Sec<?>> sl = (SecurityLattice<Sec<?>>)context.sl;
+                ignoreBit = b -> sl.lowerEqualsThan(sl.sup(storage.secsPerBit.get(b).stream()), sec);
+            }
+
             for (Rule rule : rules.rules.values()) {
                 Bit start = rule.start;
-                if (excludedOutputBits.contains(start)){
+                if (excludedOutputBits.contains(start) || ignoreBit.test(start)){
                     continue;
                 }
                 for (Bit end : rule.replacements) {
@@ -494,7 +518,7 @@ public class LeakageCalculation {
         Map<Bit, Rule> rules = new HashMap<>();
         context.walkBits(b -> {
             if (!context.isInputBit(b)) {
-                rules.put(b, new Rule(b, rule(b)));
+                rules.put(b, new Rule(b, rule(b), false));
             }
         }, b -> !b.isUnknown());
         Map<Bit, Set<Bit>> inputBitRules = new DefaultMap<>(new HashMap<>(),new DefaultMap.Extension<Bit, Set<Bit>>(){
@@ -517,7 +541,7 @@ public class LeakageCalculation {
                                     .map(s -> (Sec<?>) s)
                                     .filter(s -> ((Lattice) context.sl).lowerEqualsThan(s, sec))
                                     .flatMap(s -> context.output.getBits((Sec) s).stream())
-                                    .collect(Collectors.toSet())));
+                                    .collect(Collectors.toSet()), false));
             // an attacker at level sec can see all inputs h
             Bit inputAnchor = inputAnchorBits.get(sec);
             for (Bit bit : context
@@ -530,7 +554,7 @@ public class LeakageCalculation {
                     .collect(Collectors.toSet())) {
                 inputBitRules.get(bit).add(inputAnchor);
             }
-            inputBitRules.entrySet().forEach(e -> rules.put(e.getKey(), new Rule(e.getKey(), e.getValue())));
+            inputBitRules.entrySet().forEach(e -> rules.put(e.getKey(), new Rule(e.getKey(), e.getValue(), context.hasInfiniteWeight(e.getKey()))));
         }
         return new Rules(inputAnchorBits, outputAnchorBits, rules);
     }

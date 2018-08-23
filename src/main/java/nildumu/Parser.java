@@ -363,12 +363,6 @@ public class Parser implements Serializable {
         ProgramNode program = (ProgramNode) generator.parse(input);
         new NameResolution(program).resolve();
         new SSAResolution(program).resolve();
-        //FixpointIteration.trialRun(program);
-        try {
-            System.out.println(Processor.process(program.context, program));
-        } catch (Exception ex){
-            ex.printStackTrace();
-        }
         return program;
     }
 
@@ -1400,7 +1394,16 @@ public class Parser implements Serializable {
         public WhileStatementNode(Location location, ExpressionNode conditionalExpression, StatementNode body) {
             super(location);
             this.conditionalExpression = conditionalExpression;
-            this.body = body instanceof BlockNode ? (BlockNode)body : new BlockNode(body.location, new ArrayList<>(Arrays.asList(body)));
+            this.body = appendWhileEnd(body instanceof BlockNode ? (BlockNode)body : new BlockNode(body.location, new ArrayList<>(Arrays.asList(body))));
+        }
+
+        private BlockNode appendWhileEnd(BlockNode blockNode){
+            if (!(blockNode.getLastStatementOrNull() instanceof WhileStatementEndNode)){
+                List<StatementNode> tmp = new ArrayList<>(blockNode.statementNodes);
+                tmp.add(new WhileStatementEndNode(this, location));
+                return new BlockNode(blockNode.location, tmp);
+            }
+            return blockNode;
         }
 
         @Override
@@ -1574,8 +1577,11 @@ public class Parser implements Serializable {
      */
     public static class WhileStatementEndNode extends StatementNode {
 
-        public WhileStatementEndNode(Location location) {
+        public final WhileStatementNode whileStatement;
+
+        public WhileStatementEndNode(WhileStatementNode whileStatement, Location location) {
             super(location);
+            this.whileStatement = whileStatement;
         }
 
         @Override
@@ -2179,7 +2185,9 @@ public class Parser implements Serializable {
 
         @Override
         public String toString() {
-            return String.format("ɸ(%s)", String.join(", ", joinedVariables.stream().map(v -> v.definition.toString())
+            return String.format("ɸ[%s](%s)",
+                    controlDeps.stream().map(MJNode::toString).collect(Collectors.joining(",")),
+                    String.join(", ", joinedVariables.stream().map(v -> v.definition.toString())
                     .collect(Collectors.toList())));
         }
 

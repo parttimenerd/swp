@@ -77,6 +77,7 @@ public class BasicUI {
     private JTable variableValueTable;
     private JButton storeJsonButton;
     private JComboBox modeComboBox;
+    private JCheckBox pruneCheckBox;
     private Context context = null;
     private DocumentListener documentListener;
     private ResponsiveTimer graphViewRefreshTimer;
@@ -172,18 +173,18 @@ public class BasicUI {
         }
         inComboxBoxHandler = false;
         storeButton.addActionListener(a -> store((String) storeSelectComboBox.getSelectedItem()));
-        storeJsonButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                JFileChooser fileChooser = new JFileChooser();
-                fileChooser.setCurrentDirectory(Paths.get(getVarContent("examples/lastJSONDir", ".")).toFile());
-                fileChooser.setDialogType(JFileChooser.SAVE_DIALOG);
-                if (fileChooser.showDialog(panel1, "Choose file to export json") == JFileChooser.APPROVE_OPTION) {
-                    Path path = fileChooser.getSelectedFile().toPath();
-                    storeGraphJSON(path);
-                    storeVarInFile("examples/lastJSONDir", path.getParent().toString());
-                }
+        storeJsonButton.addActionListener(e -> {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setCurrentDirectory(Paths.get(getVarContent("examples/lastJSONDir", ".")).toFile());
+            fileChooser.setDialogType(JFileChooser.SAVE_DIALOG);
+            if (fileChooser.showDialog(panel1, "Choose file to export json") == JFileChooser.APPROVE_OPTION) {
+                Path path = fileChooser.getSelectedFile().toPath();
+                storeGraphJSON(path);
+                storeVarInFile("examples/lastJSONDir", path.getParent().toString());
             }
+        });
+        pruneCheckBox.addActionListener(e -> {
+            graphViewRefreshTimer.request();
         });
     }
 
@@ -201,7 +202,8 @@ public class BasicUI {
             inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
         }
         try {
-            Context c = Processor.process(program, (Context.Mode) modeComboBox.getSelectedItem());
+            Context.Mode mode = (Context.Mode) modeComboBox.getSelectedItem();
+            Context c = Processor.process(program, mode);
             if (context == null || c.sl != context.sl) {
                 context = c;
                 updateSecLattice();
@@ -212,6 +214,7 @@ public class BasicUI {
             updateVariableValueTable(context);
             ssaArea.setText(Parser.process(program).toPrettyString());
             graphViewRefreshTimer.request();
+            context.checkInvariants();
         } catch (LocatedSWPException e) {
             parserErrorLabel.setText(e.getMessage());
             Location errorLocation = e.errorToken.location;
@@ -258,7 +261,7 @@ public class BasicUI {
                 if (attackerSecLevelInput.getSelectedItem() == null) {
                     return;
                 }
-                jungPanel.update(context.getJungGraphForVisu(((SecWrapper) attackerSecLevelInput.getSelectedItem()).sec));
+                jungPanel.update(context.getJungGraphForVisu(((SecWrapper) attackerSecLevelInput.getSelectedItem()).sec, pruneCheckBox.isSelected()));
             } catch (RuntimeException error) {
                 parserErrorLabel.setText(error.getMessage());
                 error.printStackTrace();
@@ -345,27 +348,30 @@ public class BasicUI {
         storeButton.setText("store");
         panel4.add(storeButton, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         final JPanel panel5 = new JPanel();
-        panel5.setLayout(new GridLayoutManager(2, 6, new Insets(0, 0, 0, 0), -1, -1));
+        panel5.setLayout(new GridLayoutManager(2, 7, new Insets(0, 0, 0, 0), -1, -1));
         splitPane1.setRightComponent(panel5);
         jungPanel = new JungPanel();
-        panel5.add(jungPanel, new GridConstraints(0, 0, 1, 6, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(2000, 2000), null, 0, false));
+        panel5.add(jungPanel, new GridConstraints(0, 0, 1, 7, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(2000, 2000), null, 0, false));
         attackerSecLevelInput = new JComboBox();
-        panel5.add(attackerSecLevelInput, new GridConstraints(1, 5, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(50, -1), null, 0, false));
+        panel5.add(attackerSecLevelInput, new GridConstraints(1, 6, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(50, -1), null, 0, false));
         resetButton = new JButton();
         resetButton.setText("reset");
-        panel5.add(resetButton, new GridConstraints(1, 4, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel5.add(resetButton, new GridConstraints(1, 5, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         automaticRedrawCheckBox = new JCheckBox();
         automaticRedrawCheckBox.setSelected(true);
         automaticRedrawCheckBox.setText("Redraw automatically");
         panel5.add(automaticRedrawCheckBox, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         redrawButton = new JButton();
         redrawButton.setText("Redraw");
-        panel5.add(redrawButton, new GridConstraints(1, 3, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel5.add(redrawButton, new GridConstraints(1, 4, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         storeJsonButton = new JButton();
         storeJsonButton.setText("Store json");
-        panel5.add(storeJsonButton, new GridConstraints(1, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel5.add(storeJsonButton, new GridConstraints(1, 3, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         modeComboBox = new JComboBox();
-        panel5.add(modeComboBox, new GridConstraints(1, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel5.add(modeComboBox, new GridConstraints(1, 2, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        pruneCheckBox = new JCheckBox();
+        pruneCheckBox.setText("Prune");
+        panel5.add(pruneCheckBox, new GridConstraints(1, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         parserErrorLabel = new JLabel();
         parserErrorLabel.setText("Label");
         panel1.add(parserErrorLabel, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));

@@ -38,6 +38,13 @@ public class Mods {
         return this;
     }
 
+    public Mods overwrite(Mods otherMods){
+        for (Map.Entry<Bit, Bit> entry : otherMods.replacements.entrySet()) {
+            replacements.put(entry.getKey(), entry.getValue());
+        }
+        return this;
+    }
+
     @Override
     public String toString() {
         return "(" + replacements.entrySet().stream().map(e -> String.format("%s ↦ %s", e.getKey(), e.getValue())).collect(Collectors.joining(", ")) + ")";

@@ -588,7 +588,7 @@ public interface Operator {
     static final BinaryOperator EQUALS = new BinaryOperatorStructured("==") {
         @Override
         public Lattices.B computeBitValue(int i, Value x, Value y) {
-            if (i > 0) {
+            if (i > 1) {
                 return ZERO;
             }
             if (x.lattice().mapBits(x, y, (a, b) -> a.val.equals(b.val) && a.isConstant()).stream().allMatch(Boolean::booleanValue)) {
@@ -637,7 +637,7 @@ public interface Operator {
 
         @Override
         public Lattices.B computeBitValue(int i, Value x, Value y) {
-            if (i > 0) {
+            if (i > 1) {
                 return ZERO;
             }
             if (x.lattice().mapBits(x, y, (a, b) -> a.val.equals(b.val) && a.isConstant()).stream().allMatch(Boolean::booleanValue)) {

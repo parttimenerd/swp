@@ -11,6 +11,10 @@ public class LocatedSWPException extends SWPException {
 	public LocatedSWPException(Token errorToken, String message) {
 		super(message);
 		this.errorToken = errorToken;
-		this.errorLocation = errorToken.location;
+		if (errorToken != null) {
+			this.errorLocation = errorToken.location;
+		} else {
+			this.errorLocation = new Location(0, 0);
+		}
 	}
 }

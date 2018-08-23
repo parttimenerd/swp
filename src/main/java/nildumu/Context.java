@@ -1,7 +1,9 @@
 package nildumu;
 
 import java.net.ContentHandler;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -9,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.Stack;
 import java.util.function.BiFunction;
@@ -39,9 +42,19 @@ import static nildumu.Parser.process;
  */
 public class Context {
 
+    /**
+     * Mode
+     */
     public static enum Mode {
         BASIC,
-        EXTENDED;
+        /**
+         * Combines the basic mode with the tracking of path knowledge
+         */
+        EXTENDED,
+        /**
+         * Combines the extended mode with the support for loops
+         */
+        LOOP;
 
         @Override
         public String toString() {
@@ -57,6 +70,12 @@ public class Context {
 
     public static @FunctionalInterface interface ModsCreator {
         public Mods apply(Context context, Bit bit, Bit assumedValue);
+    }
+
+    public static class InvariantViolationError extends NildumuError {
+        InvariantViolationError(String msg){
+            super(msg);
+        }
     }
 
     public final SecurityLattice<?> sl;
@@ -98,10 +117,15 @@ public class Context {
         }
     }, FORBID_DELETIONS, FORBID_VALUE_UPDATES);
 
+    private long nodeValueUpdateCount = 0;
+
     private final DefaultMap<Parser.MJNode, Value> nodeValueMap = new DefaultMap<>(new LinkedHashMap<>(), new DefaultMap.Extension<MJNode, Value>() {
+
         @Override
         public void handleValueUpdate(DefaultMap<MJNode, Value> map, MJNode key, Value value) {
-            throw new UnsupportedOperationException(String.format("Cannot update the value of '%s' from '%s' to '%s', updates are not supported", key, map.get(key), value));
+            if (map.get(key) != value){
+                nodeValueUpdateCount++;
+            }
         }
 
         @Override
@@ -109,13 +133,6 @@ public class Context {
             return ValueLattice.get().bot();
         }
     }, FORBID_DELETIONS);
-
-    private final DefaultMap<Bit, ModsCreator> replMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, ModsCreator>() {
-        @Override
-        public ModsCreator defaultValue(Map<Bit, ModsCreator> map, Bit key) {
-            return ((c, b, a) -> choose(b, a) == a ? new Mods(b, a) : Mods.empty());
-        }
-    });
 
     private final DefaultMap<Bit, Integer> c1LeakageMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, Integer>() {
         @Override
@@ -129,7 +146,34 @@ public class Context {
 
     private Mode mode;
 
+    /* -------------------------- extended mode specific -------------------------------*/
+
     public final Stack<Mods> modsStack = new Stack<>();
+
+    private final DefaultMap<Bit, ModsCreator> replMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, ModsCreator>() {
+        @Override
+        public ModsCreator defaultValue(Map<Bit, ModsCreator> map, Bit key) {
+            return ((c, b, a) -> choose(b, a) == a ? new Mods(b, a) : Mods.empty());
+        }
+    });
+
+    /* -------------------------- loop mode specific -------------------------------*/
+
+    private final DefaultMap<Bit, Set<Bit>> bitVersionsMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, Set<Bit>>() {
+        @Override
+        public Set<Bit> defaultValue(Map<Bit, Set<Bit>> map, Bit key) {
+            return Collections.singleton(key);
+        }
+    });
+
+    private final DefaultMap<Bit, Integer> weightMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, Integer>() {
+        @Override
+        public Integer defaultValue(Map<Bit, Integer> map, Bit key) {
+            return 1;
+        }
+    });
+
+    public static final int INFTY = Integer.MAX_VALUE;
 
     public Context(SecurityLattice sl) {
         this.sl = sl;
@@ -190,8 +234,18 @@ public class Context {
     }
 
     public boolean checkInvariants(Bit bit) {
-        return (sec(bit) == sl.bot() || (v(bit).isConstant() && d(bit).isEmpty() && c(bit).isEmpty()))
-                && (!v(bit).isConstant() || (d(bit).isEmpty() && sec(bit) == sl.bot()));
+        return (sec(bit) == sl.bot() || (!v(bit).isConstant() && d(bit).isEmpty() && c(bit).isEmpty()))
+                && (!v(bit).isConstant() || (d(bit).isEmpty() && sec(bit) == sl.bot() && c(bit).isEmpty()));
+    }
+
+    public void checkInvariants(){
+        List<String> errorMessages = new ArrayList<>();
+        walkBits(b -> {
+            if (!checkInvariants(b)){
+                errorMessages.add(String.format("Invariants don't hold for %s", b.repr()));
+            }
+        }, p -> false);
+        throw new InvariantViolationError(String.join("\n", errorMessages));
     }
 
     public boolean isInputBit(Bit bit) {
@@ -222,6 +276,19 @@ public class Context {
         System.out.println("Evaluate node " + node);
         List<Value> args = paramNode(node).stream().map(this::nodeValue).map(this::replace).collect(Collectors.toList());
         Value newValue = op(node, args);
+        if (inLoopMode() && nodeValue(node) != vl.bot()) { // dismiss first iteration
+            Value oldValue = nodeValue(node);
+            Value mergedValue = vl.mapBitsToValue(oldValue, newValue, this::merge);
+            if (oldValue != mergedValue){
+                vl.mapBits(oldValue, mergedValue, (o, m) -> {
+                    Set<Bit> set = new HashSet<>(bitVersions(o));
+                    set.add(m);
+                    bitVersions(m, set);
+                    return null;
+                });
+            }
+            newValue = mergedValue;
+        }
         nodeValue(node, newValue);
         newValue.description(node.getTextualId()).node(node);
         return newValue;
@@ -304,7 +371,11 @@ public class Context {
     }
 
     public LeakageCalculation.JungGraph getJungGraphForVisu(Sec<?> secLevel){
-        return new LeakageCalculation.JungGraph(getLeakageGraph().rules, secLevel, getLeakageGraph().minCutBits(secLevel));
+        return getJungGraphForVisu(secLevel, false);
+    }
+
+    public LeakageCalculation.JungGraph getJungGraphForVisu(Sec<?> secLevel, boolean excludeUnimportantBits){
+        return new LeakageCalculation.JungGraph(this, getLeakageGraph().rules, secLevel, getLeakageGraph().minCutBits(secLevel), excludeUnimportantBits);
     }
 
     public Set<MJNode> nodes(){
@@ -331,9 +402,24 @@ public class Context {
         }
     }
 
-    public boolean inExtendedMode(){
-        return mode == Mode.EXTENDED;
+    /**
+     * In extended or later mode?
+     */
+    boolean inExtendedMode(){
+        return mode == Mode.EXTENDED || mode == Mode.LOOP;
     }
+
+    boolean inLoopMode(){
+        return mode == Mode.LOOP;
+    }
+
+    public Context mode(Mode mode){
+        assert this.mode == null;
+        this.mode = mode;
+        return this;
+    }
+
+    /* -------------------------- extended mode specific -------------------------------*/
 
     public Bit replace(Bit bit){
         if (inExtendedMode()) {
@@ -397,9 +483,78 @@ public class Context {
         return b;
     }
 
-    public Context mode(Mode mode){
-        assert this.mode == null;
-        this.mode = mode;
-        return this;
+    /* -------------------------- loop mode specific -------------------------------*/
+
+    public Set<Bit> bitVersions(Bit bit){
+        return bitVersionsMap.get(bit);
+    }
+
+    public void bitVersions(Bit bit, Set<Bit> versions){
+        bitVersionsMap.put(bit, versions);
+    }
+
+    public int weight(Bit bit){
+        return weightMap.get(bit);
+    }
+
+    public void weight(Bit bit, int weight){
+        assert weight == 1 || weight == INFTY;
+        weightMap.put(bit, weight);
+    }
+
+    public boolean hasInfiniteWeight(Bit bit){
+        return weight(bit) == INFTY;
+    }
+
+    public Bit merge(Bit o, Bit n){
+        B vt = bs.sup(v(o), v(n));
+        DependencySet dt = ds.sup(d(o), d(n));
+        DependencySet ct = ds.sup(c(o), c(n));
+        Bit m = new Bit(vt, dt, ct);
+        if (sim(o, m)){
+            return o;
+        }
+        repl(m, (c, b, a) -> {
+            Mods oMods = repl(o).apply(c, b, a);
+            Mods nMods = repl(n).apply(c, b, a);
+            return Mods.empty().add(oMods).overwrite(nMods);
+        });
+        return m;
+    }
+
+    DependencySet directDependencies(Bit bit){
+        return ds.sup(d(bit), c(bit));
+    }
+
+    public boolean sim(Bit o, Bit m){
+        if (v(o) != v(m)){    // the bit value changed
+            return false;
+        }
+        if (o.valueEquals(m)){ // the dependencies are all equal
+            return true;
+        }
+        Queue<Bit> q = new ArrayDeque<>();
+        Set<Bit> alreadyVisited = new HashSet<>();
+        Set<Bit> oldDeps = directDependencies(o);
+        Set<Bit> anchorBits = oldDeps.stream().map(this::bitVersions).flatMap(Set::stream).collect(Collectors.toSet());
+        q.add(m);
+        while (!q.isEmpty()){
+            Bit x = q.poll();
+            if (alreadyVisited.contains(x)){
+                continue;
+            }
+            alreadyVisited.add(x);
+            if (!anchorBits.contains(x)){
+                if (directDependencies(x).isEmpty()){
+                    return false;
+                }
+                directDependencies(x).stream().filter(y -> !alreadyVisited.contains(y)).forEach(q::add);
+            }
+        }
+        return true;
+    }
+
+    public long getNodeValueUpdateCount(){
+        return nodeValueUpdateCount;
     }
 }
