@@ -1,11 +1,8 @@
 package swp.parser.lr;
 
-import swp.grammar.Terminal;
+import java.util.*;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import swp.grammar.Terminal;
 
 /**
  * Right hand context. Its elements are sorted.

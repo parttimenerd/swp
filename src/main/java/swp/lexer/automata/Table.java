@@ -1,14 +1,11 @@
 package swp.lexer.automata;
 
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+
 import swp.lexer.TerminalSet;
 import swp.util.Utils;
-
-import java.io.IOException;
-import java.io.Serializable;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * A lexer state transition table

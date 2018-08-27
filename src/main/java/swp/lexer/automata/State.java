@@ -1,9 +1,9 @@
 package swp.lexer.automata;
 
-import swp.util.Utils;
-import swp.lexer.alphabet.AlphabetTerminals;
-
 import java.util.*;
+
+import swp.lexer.alphabet.AlphabetTerminals;
+import swp.util.Utils;
 
 /**
  * An automaton state.

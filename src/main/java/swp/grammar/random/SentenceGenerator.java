@@ -1,17 +1,8 @@
 package swp.grammar.random;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 
-import swp.grammar.Grammar;
-import swp.grammar.NonTerminal;
-import swp.grammar.Production;
-import swp.grammar.Symbol;
-import swp.grammar.Terminal;
+import swp.grammar.*;
 
 /**
  * A generator of random sentences that are valid for a given grammar.

@@ -1,8 +1,7 @@
 package swp.grammar;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * A non terminal symbol with associated productions.

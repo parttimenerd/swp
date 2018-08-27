@@ -1,12 +1,9 @@
 package swp.parser.lr;
 
-import swp.grammar.Grammar;
-import swp.grammar.NonTerminal;
-import swp.grammar.Production;
-import swp.grammar.Symbol;
-import swp.util.Utils;
-
 import java.util.*;
+
+import swp.grammar.*;
+import swp.util.Utils;
 
 /**
  * Created by parttimenerd on 15.07.16.

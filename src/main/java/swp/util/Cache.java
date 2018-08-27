@@ -1,7 +1,6 @@
 package swp.util;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * A simple lru cache implementation

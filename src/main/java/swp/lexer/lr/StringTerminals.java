@@ -1,10 +1,10 @@
 package swp.lexer.lr;
 
-import swp.SWPException;
-import swp.lexer.TerminalSet;
-
 import java.io.Serializable;
 import java.util.*;
+
+import swp.SWPException;
+import swp.lexer.TerminalSet;
 
 /**
  * Created by parttimenerd on 28.07.16.

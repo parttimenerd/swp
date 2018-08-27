@@ -1,12 +1,9 @@
 package swp.lexer;
 
-import swp.util.Pair;
-import swp.util.Utils;
-
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
+
+import swp.util.*;
 
 /**
  * Set terminal symbol types.

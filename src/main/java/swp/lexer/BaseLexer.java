@@ -1,9 +1,7 @@
 package swp.lexer;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.util.HashSet;
-import java.util.Set;
+import java.io.*;
+import java.util.*;
 
 public abstract class BaseLexer implements Lexer {
 

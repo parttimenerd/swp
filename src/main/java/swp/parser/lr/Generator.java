@@ -1,29 +1,15 @@
 package swp.parser.lr;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutput;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.*;
+import java.util.function.*;
 
-import swp.Config;
-import swp.SWPException;
-import swp.grammar.ExtGrammarBuilder;
-import swp.grammar.Grammar;
+import swp.*;
+import swp.grammar.*;
 import swp.lexer.Lexer;
-import swp.lexer.automata.AutomatonLexer;
-import swp.lexer.automata.LexerDescriptionParser;
-import swp.lexer.automata.Table;
-import swp.util.Cache;
-import swp.util.Pair;
+import swp.lexer.automata.*;
+import swp.util.*;
 
 public class Generator {
 
@@ -166,6 +152,8 @@ public class Generator {
 
 	private static void store(String id, Pair<Table, LRParserTable> pair) throws IOException {
 		Pair<File, File> fileNames = getFilePair(id);
+		fileNames.first.getParentFile().mkdirs();
+		fileNames.second.getParentFile().mkdirs();
 		try (ObjectOutput oo = new ObjectOutputStream(new FileOutputStream(fileNames.first))) {
 			oo.writeObject(pair.first);
 		}

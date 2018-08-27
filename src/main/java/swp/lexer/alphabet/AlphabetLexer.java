@@ -1,11 +1,8 @@
 package swp.lexer.alphabet;
 
-import swp.lexer.BaseLexer;
-import swp.lexer.Location;
-import swp.lexer.Token;
+import java.io.*;
 
-import java.io.IOException;
-import java.io.InputStream;
+import swp.lexer.*;
 
 /**
  * Simple lexer the recognizes ASCII letters.

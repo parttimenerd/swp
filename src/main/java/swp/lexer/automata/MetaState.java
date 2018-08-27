@@ -1,9 +1,8 @@
 package swp.lexer.automata;
 
-import swp.util.Pair;
-import swp.util.Utils;
-
 import java.util.*;
+
+import swp.util.*;
 
 /**
  * A meta node consists of several nodes but has only one entry and one exit node.

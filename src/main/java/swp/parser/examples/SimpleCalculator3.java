@@ -1,17 +1,12 @@
 package swp.parser.examples;
 
-import swp.SWPException;
-import swp.lexer.Token;
-import swp.parser.lr.BaseAST;
-import swp.parser.lr.Generator;
-import swp.parser.lr.ListAST;
-
 import java.io.Serializable;
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+
+import swp.SWPException;
+import swp.lexer.Token;
+import swp.parser.lr.*;
 
 /**
  * Different ways to implement a simple calculator.

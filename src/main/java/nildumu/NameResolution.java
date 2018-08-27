@@ -10,7 +10,13 @@ import static nildumu.Parser.*;
  */
 public class NameResolution implements Parser.NodeVisitor<Object> {
 
-    private final SymbolTable symbolTable;
+    public static class WrongNumberOfArgumentsError extends NildumuError {
+        public WrongNumberOfArgumentsError(MethodInvocationNode invocation, String msg){
+            super(String.format("%s: %s", invocation, msg));
+        }
+    }
+
+    private SymbolTable symbolTable;
     private final ProgramNode program;
 
     public NameResolution(ProgramNode program) {
@@ -95,25 +101,37 @@ public class NameResolution implements Parser.NodeVisitor<Object> {
 
     @Override
     public Object visit(MethodNode method) {
+        SymbolTable oldSymbolTable = symbolTable;
+        symbolTable = new SymbolTable();
         symbolTable.enterScope();
         visitChildrenDiscardReturn(method);
         symbolTable.leaveScope();
+        symbolTable = oldSymbolTable;
         return null;
     }
 
     @Override
     public Object visit(ParameterNode parameter) {
-        if (symbolTable.isDirectlyInCurrentScope(parameter.name)){
-            throw new MJError(String.format("Parameter %s already defined for this method", parameter.name));
+        if (symbolTable.isDirectlyInCurrentScope(parameter.name)) {
+            throw new MJError(String.format("A parameter with the name %s already is already defined for the method", parameter.name));
         }
-        Variable definition = new Variable(parameter.name, false, false);
+        Variable definition = new Variable(parameter.name);
+        symbolTable.insert(parameter.name, definition);
+        parameter.definition = definition;
         return null;
     }
 
     @Override
     public Object visit(MethodInvocationNode methodInvocation) {
-        methodInvocation.definition = program.getMethod(methodInvocation.method);
+        if (!program.hasMethod(methodInvocation.method)){
+            throw new MJError(String.format("%s: No such method %s", methodInvocation, methodInvocation.method));
+        }
+        MethodNode method = program.getMethod(methodInvocation.method);
+        methodInvocation.definition = method;
         visitChildrenDiscardReturn(methodInvocation);
+        if (methodInvocation.arguments.size() != method.parameters.size()){
+            throw new WrongNumberOfArgumentsError(methodInvocation, String.format("Expected %d arguments got %d", method.parameters.size(), methodInvocation.arguments.size()));
+        }
         return null;
     }
 }

@@ -1,9 +1,7 @@
 package swp.grammar;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
  * A grammar production with a left and a right hand side.

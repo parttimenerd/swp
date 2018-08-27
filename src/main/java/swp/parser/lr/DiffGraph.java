@@ -1,21 +1,12 @@
 package swp.parser.lr;
 
-import swp.grammar.Grammar;
-import swp.grammar.Production;
-import swp.grammar.Symbol;
-import swp.util.Utils;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.nio.file.*;
+import java.util.*;
+
+import swp.grammar.*;
+import swp.util.Utils;
 
 /**
  * Created by parttimenerd on 15.07.16.

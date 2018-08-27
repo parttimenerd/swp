@@ -26,6 +26,42 @@ public class LoopTests {
                 "l output int o = x;").leakage(l -> l.hasLeakage("l", 1));
     }
 
+    @Test
+    public void testBasicLoop2(){
+        parse("h input int h = 0b0u; int htmp = h;\n" +
+                "int x = 0;\n" +
+                "while (htmp){\n" +
+                "\thtmp = htmp;\n" +
+                "\tx = htmp;\n" +
+                "}");
+    }
+
+    @Test
+    public void testBasicLoop3(){
+        parse("h input int h = 0bu;\n" +
+                "while (h){\n" +
+                "\th = h;\n" +
+                "}\n" +
+                "l output int o = h").leakage(l -> l.hasLeakage("l", 1));
+    }
+
+    /**
+     * This one didn't terminate
+     * <code>
+     *     h input int h = 0b0u;
+     *     while (h == h){
+     * 	        h + 1;
+     *     }
+     * </code>
+     */
+    @Test
+    public void testBasicLoop4(){
+        parse("h input int h = 0b0u;\n" +
+                "while (h == h){\n" +
+                "\th + 1;\n" +
+                "}\n");
+    }
+
     ContextMatcher parse(String program){
         return new ContextMatcher(process(program, Context.Mode.LOOP));
     }

@@ -4,19 +4,11 @@ package swp.parser.ll;
  * Created by parttimenerd on 02.08.16.
  */
 
-import swp.grammar.Grammar;
-import swp.grammar.NonTerminal;
-import swp.grammar.Symbol;
-import swp.grammar.Terminal;
-import swp.lexer.Lexer;
-import swp.lexer.Token;
-import swp.parser.lr.ASTLeaf;
-import swp.parser.lr.BaseAST;
+import java.util.*;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import swp.grammar.*;
+import swp.lexer.*;
+import swp.parser.lr.*;
 
 /**
  * Implements an LL(1) parser. Might or might not work properly. It's useless for almost every real world grammar.

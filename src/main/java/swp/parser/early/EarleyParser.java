@@ -1,14 +1,9 @@
 package swp.parser.early;
 
-import swp.grammar.Grammar;
-import swp.grammar.NonTerminal;
-import swp.grammar.Production;
-import swp.grammar.Terminal;
-import swp.lexer.Lexer;
-import swp.lexer.Token;
+import java.util.*;
 
-import java.util.ArrayList;
-import java.util.List;
+import swp.grammar.*;
+import swp.lexer.*;
 
 public class EarleyParser {
 

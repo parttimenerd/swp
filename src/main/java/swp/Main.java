@@ -1,11 +1,9 @@
 package swp;
 
-import swp.grammar.Grammar;
-import swp.grammar.GrammarBuilder;
+import swp.grammar.*;
 import swp.grammar.random.SentenceGenerator;
 import swp.lexer.alphabet.AlphabetTerminals;
-import swp.parser.lr.DiffGraph;
-import swp.parser.lr.Graph;
+import swp.parser.lr.*;
 
 public class Main {
 

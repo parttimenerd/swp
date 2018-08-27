@@ -1,39 +1,15 @@
 package nildumu;
 
-import java.net.ContentHandler;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
-import java.util.Stack;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
+import java.util.*;
+import java.util.function.*;
 import java.util.stream.Collectors;
 
-import edu.uci.ics.jung.graph.DirectedGraph;
 import swp.util.Pair;
 
-import static nildumu.DefaultMap.ForbiddenAction.FORBID_DELETIONS;
-import static nildumu.DefaultMap.ForbiddenAction.FORBID_VALUE_UPDATES;
-import static nildumu.Lattices.B;
-import static nildumu.Lattices.Bit;
-import static nildumu.Lattices.DependencySet;
-import static nildumu.Lattices.DependencySetLattice;
-import static nildumu.Lattices.Sec;
-import static nildumu.Lattices.SecurityLattice;
+import static nildumu.DefaultMap.ForbiddenAction.*;
 import static nildumu.Lattices.*;
 import static nildumu.LeakageCalculation.jungEdgeGraph;
 import static nildumu.Parser.MJNode;
-import static nildumu.Parser.process;
 
 /**
  * The context contains the global state and the global functions from the thesis.
@@ -60,6 +36,17 @@ public class Context {
         public String toString() {
             return name().toLowerCase().replace("_", " ");
         }
+    }
+
+    /**
+     * Overapproximation computation mode for the approximation of functions without calling them
+     */
+    public static enum MethodBotMode {
+        /**
+         * Simple call-string based version, that uses the trivial overapproximation if it
+         * cannot analyze a function
+         */
+        BASIC
     }
 
     public static class NotAnInputBit extends NildumuError {
@@ -123,7 +110,7 @@ public class Context {
 
         @Override
         public void handleValueUpdate(DefaultMap<MJNode, Value> map, MJNode key, Value value) {
-            if (map.get(key) != value){
+            if (vl.mapBits(map.get(key), value, (a, b) -> a != b).stream().anyMatch(p -> p)){
                 nodeValueUpdateCount++;
             }
         }
@@ -146,7 +133,7 @@ public class Context {
 
     private Mode mode;
 
-    /* -------------------------- extended mode specific -------------------------------*/
+    /*-------------------------- extended mode specific -------------------------------*/
 
     public final Stack<Mods> modsStack = new Stack<>();
 
@@ -157,7 +144,7 @@ public class Context {
         }
     });
 
-    /* -------------------------- loop mode specific -------------------------------*/
+    /*-------------------------- loop mode specific -------------------------------*/
 
     private final DefaultMap<Bit, Set<Bit>> bitVersionsMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, Set<Bit>>() {
         @Override
@@ -174,6 +161,12 @@ public class Context {
     });
 
     public static final int INFTY = Integer.MAX_VALUE;
+
+    /*-------------------------- methods -------------------------------*/
+
+    private MethodInvocationHandler methodInvocationHandler;
+
+    /*-------------------------- unspecific -------------------------------*/
 
     public Context(SecurityLattice sl) {
         this.sl = sl;
@@ -556,5 +549,25 @@ public class Context {
 
     public long getNodeValueUpdateCount(){
         return nodeValueUpdateCount;
+    }
+
+    public void setReturnValue(Value value){
+        variableStates.get(variableStates.size() - 1).setReturnValue(value);
+    }
+
+    public Value getReturnValue(){
+        return variableStates.get(variableStates.size() - 1).getReturnValue();
+    }
+
+    /*-------------------------- methods -------------------------------*/
+
+    public Context methodInvocationHandler(MethodInvocationHandler handler) {
+        assert methodInvocationHandler == null;
+        methodInvocationHandler = handler;
+        return this;
+    }
+
+    public MethodInvocationHandler methodInvocationHandler(){
+        return methodInvocationHandler == null ? MethodInvocationHandler.createDefault() : methodInvocationHandler;
     }
 }

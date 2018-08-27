@@ -1,8 +1,8 @@
 package swp.grammar;
 
-import swp.lexer.TerminalSet;
-
 import java.io.Serializable;
+
+import swp.lexer.TerminalSet;
 
 /**
  * A terminal symbol

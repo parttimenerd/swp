@@ -1,9 +1,9 @@
 package swp.parser.lr;
 
+import java.util.*;
+
 import swp.grammar.*;
 import swp.util.Utils;
-
-import java.util.*;
 
 /**
  * Created by parttimenerd on 15.07.16.

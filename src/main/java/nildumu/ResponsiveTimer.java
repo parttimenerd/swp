@@ -1,7 +1,7 @@
 package nildumu;
 
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
+import java.util.concurrent.*;
 
 public class ResponsiveTimer {
 
@@ -14,6 +14,9 @@ public class ResponsiveTimer {
     private long counter = initialDelay;
     private long delay = initialDelay;
     private boolean requestedAction = false;
+    private boolean autoRun = true;
+    private ExecutorService executor = Executors.newSingleThreadExecutor();
+    private Future<?> future;
 
     public ResponsiveTimer(Runnable task) {
         this.task = task;
@@ -30,8 +33,14 @@ public class ResponsiveTimer {
                 if (requestedAction) {
                     requestedAction = false;
                     long start = System.currentTimeMillis();
-                    task.run();
-                    delay = System.currentTimeMillis() - start;
+                    future = executor.submit(task);
+                    try {
+                        future.get();
+                        delay = System.currentTimeMillis() - start;
+                    } catch (InterruptedException e) {
+                    } catch (ExecutionException e) {
+                        e.printStackTrace();
+                    }
                     System.out.println(String.format("Duration: %d", delay));
                 }
                 counter = checkInterval;
@@ -40,7 +49,35 @@ public class ResponsiveTimer {
     }
 
     public void request(){
-        requestedAction = true;
+        //assert autoRun;
+        if (autoRun) {
+            requestedAction = true;
+        }
+    }
+
+    public void run(){
+        if (autoRun){
+            stop();
+        }
+        long start = System.currentTimeMillis();
+        future = executor.submit(task);
+        try {
+            future.get();
+        } catch (InterruptedException e) {
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+        if (autoRun){
+            restart();
+        }
+    }
+
+    public synchronized void abort(){
+        executor.shutdownNow();
+        executor = Executors.newSingleThreadExecutor();
+       /* if (future != null){
+            future.cancel(true);
+        }*/
     }
 
     public void stop(){
@@ -50,5 +87,14 @@ public class ResponsiveTimer {
     public void restart(){
         counter = initialDelay;
         delay = initialDelay;
+    }
+
+    public void setAutoRun(boolean autoRun){
+        this.autoRun = autoRun;
+        if (autoRun){
+            this.request();
+        } else {
+            this.stop();
+        }
     }
 }

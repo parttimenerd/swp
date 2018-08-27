@@ -1,9 +1,9 @@
 package swp.parser.ll;
 
+import java.util.*;
+
 import swp.grammar.*;
 import swp.lexer.TerminalSet;
-
-import java.util.*;
 
 /**
  * Created by parttimenerd on 02.08.16.

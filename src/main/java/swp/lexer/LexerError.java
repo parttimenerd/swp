@@ -1,12 +1,9 @@
 package swp.lexer;
 
-import swp.LocatedSWPException;
-import swp.SWPException;
-import swp.util.Utils;
+import java.util.*;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
+import swp.LocatedSWPException;
+import swp.util.Utils;
 
 /**
  * Created by parttimenerd on 03.08.16.

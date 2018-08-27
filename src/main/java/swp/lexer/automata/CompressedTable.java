@@ -1,13 +1,11 @@
 package swp.lexer.automata;
 
+import java.io.IOException;
+import java.nio.file.*;
+import java.util.*;
+
 import swp.lexer.TerminalSet;
 import swp.lexer.alphabet.AlphabetTerminals;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Clusters classes of terminals together

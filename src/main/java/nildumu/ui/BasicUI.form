@@ -3,7 +3,7 @@
   <grid id="27dc6" binding="panel1" default-binding="true" layout-manager="GridLayoutManager" row-count="2" column-count="1" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
     <margin top="0" left="0" bottom="0" right="0"/>
     <constraints>
-      <xy x="97" y="97" width="897" height="570"/>
+      <xy x="97" y="97" width="1276" height="570"/>
     </constraints>
     <properties/>
     <border type="none"/>
@@ -14,7 +14,11 @@
             <preferred-size width="200" height="200"/>
           </grid>
         </constraints>
-        <properties/>
+        <properties>
+          <continuousLayout value="false"/>
+          <dividerLocation value="614"/>
+          <oneTouchExpandable value="true"/>
+        </properties>
         <border type="none"/>
         <children>
           <splitpane id="90c27">
@@ -22,6 +26,7 @@
               <splitpane position="left"/>
             </constraints>
             <properties>
+              <continuousLayout value="true"/>
               <orientation value="0"/>
             </properties>
             <border type="none"/>
@@ -139,7 +144,7 @@
                   </scrollpane>
                 </children>
               </tabbedpane>
-              <grid id="6841c" layout-manager="GridLayoutManager" row-count="2" column-count="2" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
+              <grid id="6841c" layout-manager="GridLayoutManager" row-count="3" column-count="9" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
                 <margin top="0" left="0" bottom="0" right="0"/>
                 <constraints>
                   <splitpane position="left"/>
@@ -147,44 +152,121 @@
                 <properties/>
                 <border type="none"/>
                 <children>
-                  <scrollpane id="92ddd" class="org.fife.ui.rtextarea.RTextScrollPane" binding="inputScrollArea">
+                  <grid id="8e756" layout-manager="BorderLayout" hgap="0" vgap="0">
                     <constraints>
-                      <grid row="1" column="0" row-span="1" col-span="2" vsize-policy="3" hsize-policy="7" anchor="0" fill="0" indent="0" use-parent-layout="false"/>
+                      <grid row="1" column="0" row-span="1" col-span="9" vsize-policy="3" hsize-policy="3" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
                     </constraints>
-                    <properties>
-                      <minimumSize width="200" height="200"/>
-                      <preferredSize width="400" height="200"/>
-                    </properties>
+                    <properties/>
                     <border type="none"/>
                     <children>
-                      <component id="14f18" class="org.fife.ui.rsyntaxtextarea.RSyntaxTextArea" binding="inputArea">
-                        <constraints/>
+                      <scrollpane id="92ddd" class="org.fife.ui.rtextarea.RTextScrollPane" binding="inputScrollArea">
+                        <constraints border-constraint="Center"/>
+                        <properties>
+                          <minimumSize width="200" height="200"/>
+                          <preferredSize width="400" height="200"/>
+                        </properties>
+                        <border type="none"/>
+                        <children>
+                          <component id="14f18" class="org.fife.ui.rsyntaxtextarea.RSyntaxTextArea" binding="inputArea">
+                            <constraints/>
+                            <properties>
+                              <closeCurlyBraces value="true"/>
+                              <codeFoldingEnabled value="true"/>
+                              <paintMarkOccurrencesBorder value="true"/>
+                              <paintMatchedBracketPair value="true"/>
+                            </properties>
+                          </component>
+                        </children>
+                      </scrollpane>
+                    </children>
+                  </grid>
+                  <grid id="3a926" layout-manager="GridLayoutManager" row-count="1" column-count="5" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
+                    <margin top="0" left="0" bottom="0" right="0"/>
+                    <constraints>
+                      <grid row="2" column="0" row-span="1" col-span="9" vsize-policy="3" hsize-policy="3" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
+                    </constraints>
+                    <properties/>
+                    <border type="none"/>
+                    <children>
+                      <component id="65e72" class="javax.swing.JButton" binding="runButton">
+                        <constraints>
+                          <grid row="0" column="1" row-span="1" col-span="1" vsize-policy="0" hsize-policy="0" anchor="0" fill="1" indent="0" use-parent-layout="false">
+                            <preferred-size width="10" height="-1"/>
+                          </grid>
+                        </constraints>
+                        <properties>
+                          <text value="🢒"/>
+                          <toolTipText value="Request processing of the program"/>
+                        </properties>
+                      </component>
+                      <component id="b49a4" class="javax.swing.JButton" binding="stopButton">
+                        <constraints>
+                          <grid row="0" column="2" row-span="1" col-span="1" vsize-policy="0" hsize-policy="1" anchor="0" fill="1" indent="0" use-parent-layout="false">
+                            <preferred-size width="10" height="-1"/>
+                          </grid>
+                        </constraints>
+                        <properties>
+                          <text value="⏹"/>
+                        </properties>
+                      </component>
+                      <component id="b0df5" class="javax.swing.JComboBox" binding="modeComboBox">
+                        <constraints>
+                          <grid row="0" column="3" row-span="1" col-span="1" vsize-policy="0" hsize-policy="2" anchor="8" fill="1" indent="0" use-parent-layout="false"/>
+                        </constraints>
+                        <properties/>
+                      </component>
+                      <component id="f90bf" class="javax.swing.JCheckBox" binding="autoRunCheckBox">
+                        <constraints>
+                          <grid row="0" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
+                        </constraints>
+                        <properties>
+                          <text value="⮔"/>
+                          <toolTipText value="Auto run the processing of the program"/>
+                        </properties>
+                      </component>
+                      <component id="5fb14" class="javax.swing.JComboBox" binding="methodHandlerSelectionComboxBox">
+                        <constraints>
+                          <grid row="0" column="4" row-span="1" col-span="1" vsize-policy="0" hsize-policy="6" anchor="8" fill="1" indent="0" use-parent-layout="false"/>
+                        </constraints>
                         <properties/>
                       </component>
                     </children>
-                  </scrollpane>
-                  <component id="17af7" class="javax.swing.JComboBox" binding="storeSelectComboBox">
+                  </grid>
+                  <grid id="98ed1" layout-manager="GridLayoutManager" row-count="1" column-count="9" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
+                    <margin top="0" left="0" bottom="0" right="0"/>
                     <constraints>
-                      <grid row="0" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="2" anchor="8" fill="1" indent="0" use-parent-layout="false"/>
+                      <grid row="0" column="0" row-span="1" col-span="9" vsize-policy="3" hsize-policy="3" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
                     </constraints>
-                    <properties>
-                      <editable value="true"/>
-                      <model/>
-                    </properties>
-                  </component>
-                  <component id="fb689" class="javax.swing.JButton" binding="storeButton">
-                    <constraints>
-                      <grid row="0" column="1" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
-                    </constraints>
-                    <properties>
-                      <text value="store"/>
-                    </properties>
-                  </component>
+                    <properties/>
+                    <border type="none"/>
+                    <children>
+                      <component id="17af7" class="javax.swing.JComboBox" binding="storeSelectComboBox">
+                        <constraints>
+                          <grid row="0" column="0" row-span="1" col-span="8" vsize-policy="0" hsize-policy="2" anchor="8" fill="1" indent="0" use-parent-layout="false"/>
+                        </constraints>
+                        <properties>
+                          <editable value="true"/>
+                          <model/>
+                        </properties>
+                      </component>
+                      <component id="fb689" class="javax.swing.JButton" binding="storeButton">
+                        <constraints>
+                          <grid row="0" column="8" row-span="1" col-span="1" vsize-policy="0" hsize-policy="0" anchor="0" fill="1" indent="0" use-parent-layout="false">
+                            <preferred-size width="5" height="-1"/>
+                          </grid>
+                        </constraints>
+                        <properties>
+                          <text value="🖪"/>
+                          <toolTipText value="Store the program as an example"/>
+                        </properties>
+                      </component>
+                    </children>
+                  </grid>
                 </children>
               </grid>
             </children>
           </splitpane>
-          <grid id="92497" layout-manager="GridLayoutManager" row-count="2" column-count="7" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
+          <grid id="92497" layout-manager="GridLayoutManager" row-count="2" column-count="10" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
             <margin top="0" left="0" bottom="0" right="0"/>
             <constraints>
               <splitpane position="right"/>
@@ -194,7 +276,7 @@
             <children>
               <component id="2defd" class="nildumu.ui.JungPanel" binding="jungPanel">
                 <constraints>
-                  <grid row="0" column="0" row-span="1" col-span="7" vsize-policy="7" hsize-policy="7" anchor="0" fill="0" indent="0" use-parent-layout="false">
+                  <grid row="0" column="0" row-span="1" col-span="10" vsize-policy="7" hsize-policy="7" anchor="0" fill="0" indent="0" use-parent-layout="false">
                     <preferred-size width="2000" height="2000"/>
                   </grid>
                 </constraints>
@@ -202,7 +284,7 @@
               </component>
               <component id="1e96" class="javax.swing.JComboBox" binding="attackerSecLevelInput">
                 <constraints>
-                  <grid row="1" column="6" row-span="1" col-span="1" vsize-policy="0" hsize-policy="1" anchor="8" fill="1" indent="0" use-parent-layout="false">
+                  <grid row="1" column="9" row-span="1" col-span="1" vsize-policy="0" hsize-policy="1" anchor="8" fill="1" indent="0" use-parent-layout="false">
                     <preferred-size width="50" height="-1"/>
                   </grid>
                 </constraints>
@@ -210,7 +292,7 @@
               </component>
               <component id="2a766" class="javax.swing.JButton" binding="resetButton">
                 <constraints>
-                  <grid row="1" column="5" row-span="1" col-span="1" vsize-policy="0" hsize-policy="0" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
+                  <grid row="1" column="8" row-span="1" col-span="1" vsize-policy="0" hsize-policy="0" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
                 </constraints>
                 <properties>
                   <text value="reset"/>
@@ -227,7 +309,7 @@
               </component>
               <component id="b77ca" class="javax.swing.JButton" binding="redrawButton" default-binding="true">
                 <constraints>
-                  <grid row="1" column="4" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
+                  <grid row="1" column="7" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
                 </constraints>
                 <properties>
                   <text value="Redraw"/>
@@ -235,17 +317,11 @@
               </component>
               <component id="e3a2d" class="javax.swing.JButton" binding="storeJsonButton" default-binding="true">
                 <constraints>
-                  <grid row="1" column="3" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
+                  <grid row="1" column="6" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
                 </constraints>
                 <properties>
                   <text value="Store json"/>
                 </properties>
-              </component>
-              <component id="b0df5" class="javax.swing.JComboBox" binding="modeComboBox">
-                <constraints>
-                  <grid row="1" column="2" row-span="1" col-span="1" vsize-policy="0" hsize-policy="2" anchor="8" fill="1" indent="0" use-parent-layout="false"/>
-                </constraints>
-                <properties/>
               </component>
               <component id="fa28f" class="javax.swing.JCheckBox" binding="pruneCheckBox" default-binding="true">
                 <constraints>

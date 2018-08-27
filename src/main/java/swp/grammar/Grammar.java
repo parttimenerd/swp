@@ -1,21 +1,11 @@
 package swp.grammar;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.Stack;
+import java.util.*;
 import java.util.function.Function;
 
 import swp.lexer.TerminalSet;
-import swp.parser.lr.BaseAST;
-import swp.parser.lr.ListAST;
+import swp.parser.lr.*;
 import swp.util.SerializableFunction;
 
 import static swp.util.Utils.join;

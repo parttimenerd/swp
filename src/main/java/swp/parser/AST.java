@@ -1,9 +1,9 @@
 package swp.parser;
 
+import java.util.List;
+
 import swp.grammar.NonTerminal;
 import swp.lexer.Token;
-
-import java.util.List;
 
 /**
  * Created by parttimenerd on 15.05.16.

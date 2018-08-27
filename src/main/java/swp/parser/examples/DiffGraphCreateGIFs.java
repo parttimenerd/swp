@@ -1,7 +1,6 @@
 package swp.parser.examples;
 
-import swp.grammar.Grammar;
-import swp.grammar.GrammarBuilder;
+import swp.grammar.*;
 import swp.lexer.alphabet.AlphabetTerminals;
 import swp.parser.lr.DiffGraph;
 

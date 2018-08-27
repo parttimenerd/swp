@@ -1,11 +1,7 @@
 package nildumu;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Set;
+import java.util.*;
+import java.util.function.BiFunction;
 
 /**
  * An extensible wrapper around an ordinary map. Usually used to implement mappings that appear in
@@ -21,9 +17,19 @@ public class DefaultMap<K, V> implements Map<K, V> {
     private final boolean forbidValueUpdates;
     private final boolean forbidDeletions;
 
+    public DefaultMap(BiFunction<Map<K, V>, K, V> defaultValueProducer, ForbiddenAction... forbiddenActions) {
+        this(new HashMap<>(), new Extension<K, V>() {
+            @Override
+            public V defaultValue(Map<K, V> map, K key) {
+                return defaultValueProducer.apply(map, key);
+            }
+        }, forbiddenActions);
+    }
+
     public DefaultMap(Map<K, V> map, ForbiddenAction... forbiddenActions) {
         this(map, new Extension<K, V>() {}, forbiddenActions);
     }
+
     public DefaultMap(Map<K, V> map, Extension<K, V> extension, ForbiddenAction... forbiddenActions) {
         this.map = map;
         this.extension = extension;

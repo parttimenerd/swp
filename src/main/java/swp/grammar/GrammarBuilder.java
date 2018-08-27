@@ -1,15 +1,12 @@
 package swp.grammar;
 
-import swp.SWPException;
-import swp.lexer.TerminalSet;
-import swp.parser.lr.BaseAST;
-import swp.parser.lr.ListAST;
-import swp.util.Pair;
-import swp.util.SerializableFunction;
-import swp.util.Utils;
-
 import java.io.Serializable;
 import java.util.*;
+
+import swp.SWPException;
+import swp.lexer.TerminalSet;
+import swp.parser.lr.*;
+import swp.util.*;
 
 /**
  * Allows the simple creation of grammars.

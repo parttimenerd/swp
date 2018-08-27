@@ -1,20 +1,14 @@
 package swp.parser.examples;
 
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.stream.Collectors;
+
 import swp.SWPException;
 import swp.lexer.Token;
-import swp.parser.lr.BaseAST;
-import swp.parser.lr.Generator;
-import swp.parser.lr.ListAST;
+import swp.parser.lr.*;
 import swp.util.Utils;
-
-import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
 
 import static swp.parser.examples.MiniJava.LexerTerminal.*;
 

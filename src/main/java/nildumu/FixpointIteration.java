@@ -2,7 +2,6 @@ package nildumu;
 
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import swp.parser.lr.BaseAST;
@@ -24,7 +23,7 @@ public class FixpointIteration {
         HashSet<Parser.MJNode> visitedBefore = new HashSet<>();
         Stack<Parser.MJNode> nodesToVisit = new Stack<>();
         nodesToVisit.add(node);
-        while (!nodesToVisit.isEmpty()){
+        while (!nodesToVisit.isEmpty() && !Thread.interrupted()){
             Parser.MJNode curNode = nodesToVisit.pop();
             boolean somethingChanged = curNode.accept(nodeVisitor);
             if (somethingChanged || !visitedBefore.contains(curNode)) {
@@ -55,7 +54,7 @@ public class FixpointIteration {
         Set<Parser.MJNode> visitedBefore = new HashSet<>();
         Stack<Parser.MJNode> nodesToVisit = new Stack<>();
         nodesToVisit.add(node);
-        while (!nodesToVisit.isEmpty()){
+        while (!nodesToVisit.isEmpty() && !Thread.interrupted()){
             Parser.MJNode curNode = nodesToVisit.pop();
             for (BaseAST childNode : curNode.children()){
                 if (childNode instanceof Parser.ExpressionNode){
@@ -73,9 +72,8 @@ public class FixpointIteration {
                             statementNodesToOmitOneTime.remove(c);
                             return false;
                         }
-                        return c instanceof Parser.MJNode && !(c instanceof Parser.ExpressionNode);
+                        return c instanceof Parser.MJNode && !(c instanceof Parser.ExpressionNode) && !(c instanceof Parser.MethodNode);
                     }).map(c -> (Parser.MJNode) c).collect(Collectors.toList());
-
                     Collections.reverse(nodesToAdd);
                     nodesToVisit.addAll(nodesToAdd);
                 }

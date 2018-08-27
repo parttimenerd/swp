@@ -1,57 +1,26 @@
 package nildumu.ui;
 
-import com.intellij.uiDesigner.core.GridConstraints;
-import com.intellij.uiDesigner.core.GridLayoutManager;
+import com.intellij.uiDesigner.core.*;
 
-import org.fife.ui.autocomplete.AutoCompletion;
-import org.fife.ui.autocomplete.BasicCompletion;
-import org.fife.ui.autocomplete.CompletionProvider;
-import org.fife.ui.autocomplete.DefaultCompletionProvider;
-import org.fife.ui.autocomplete.ShorthandCompletion;
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import org.fife.ui.rsyntaxtextarea.SquiggleUnderlineHighlightPainter;
-import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
-import org.fife.ui.rtextarea.ChangeableHighlightPainter;
-import org.fife.ui.rtextarea.RTextScrollPane;
+import org.fife.ui.autocomplete.*;
+import org.fife.ui.rsyntaxtextarea.*;
+import org.fife.ui.rtextarea.*;
 
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
+import java.nio.file.*;
+import java.util.*;
 import java.util.List;
-import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.stream.Collectors;
 
 import javax.swing.*;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.event.ListDataListener;
-import javax.swing.table.AbstractTableModel;
-import javax.swing.table.JTableHeader;
-import javax.swing.table.TableCellRenderer;
-import javax.swing.table.TableColumn;
+import javax.swing.event.*;
+import javax.swing.table.*;
 import javax.swing.text.BadLocationException;
 
-import nildumu.Context;
-import nildumu.LeakageCalculation;
-import nildumu.NildumuError;
-import nildumu.Parser;
-import nildumu.Processor;
-import nildumu.PythonCaller;
-import nildumu.ResponsiveTimer;
+import nildumu.*;
 import swp.LocatedSWPException;
 import swp.lexer.Location;
-import swp.util.ParserError;
 
 import static nildumu.Lattices.*;
 import static nildumu.Util.p;
@@ -78,13 +47,19 @@ public class BasicUI {
     private JButton storeJsonButton;
     private JComboBox modeComboBox;
     private JCheckBox pruneCheckBox;
+    private JCheckBox autoRunCheckBox;
+    private JButton runButton;
+    private JButton stopButton;
+    private JComboBox methodHandlerSelectionComboxBox;
     private Context context = null;
     private DocumentListener documentListener;
     private ResponsiveTimer graphViewRefreshTimer;
+    private ResponsiveTimer parseRefreshTimer;
     private ResponsiveTimer processRefreshTimer;
     private Object syntaxErrorHighlightTag = null;
     private Object nodeSelectHighlightTag = null;
-    private boolean inComboxBoxHandler = false;
+    private boolean inLoadComboxBoxHandler = false;
+    private boolean inMHComboxBoxHandler = false;
 
     public BasicUI() {
         documentListener = new DocumentListener() {
@@ -92,6 +67,9 @@ public class BasicUI {
             public void insertUpdate(DocumentEvent e) {
                 if (processRefreshTimer != null) {
                     processRefreshTimer.request();
+                }
+                if (parseRefreshTimer != null) {
+                    parseRefreshTimer.request();
                 }
             }
 
@@ -123,6 +101,9 @@ public class BasicUI {
         AutoCompletion ac = new AutoCompletion(provider);
         ac.install(inputArea);
 
+        boolean shouldAutoRun = getVarContent("examples/lastAutoRun", "true").equals("true");
+        autoRunCheckBox.setSelected(shouldAutoRun);
+
         for (Context.Mode mode : Context.Mode.values()) {
             modeComboBox.addItem(mode);
         }
@@ -132,24 +113,31 @@ public class BasicUI {
             storeVarInFile("examples/lastMode", mode.name());
             processRefreshTimer.request();
         });
-        graphViewRefreshTimer = new ResponsiveTimer(() -> updateGraphView());
+        graphViewRefreshTimer = new ResponsiveTimer(this::updateGraphView);
         graphViewRefreshTimer.start();
-        processRefreshTimer = new ResponsiveTimer(() -> processAndUpdate(inputArea.getText()));
+        processRefreshTimer = new ResponsiveTimer(() -> {
+            parseRefreshTimer.abort();
+            processAndUpdate(inputArea.getText());
+        });
         processRefreshTimer.start();
-        automaticRedrawCheckBox.addChangeListener(new ChangeListener() {
-            @Override
-            public void stateChanged(ChangeEvent e) {
-                if (automaticRedrawCheckBox.isSelected()) {
-                    graphViewRefreshTimer.restart();
-                } else {
-                    graphViewRefreshTimer.stop();
-                }
+        processRefreshTimer.setAutoRun(shouldAutoRun);
+        parseRefreshTimer = new ResponsiveTimer(() -> {
+            if (!autoRunCheckBox.isSelected()) {
+                parse();
             }
+        });
+        parseRefreshTimer.start();
+        boolean shouldAutoDraw = getVarContent("examples/lastAutoDraw", "true").equals("true");
+        automaticRedrawCheckBox.setSelected(shouldAutoDraw);
+        graphViewRefreshTimer.setAutoRun(shouldAutoDraw);
+        automaticRedrawCheckBox.addChangeListener(e -> {
+            graphViewRefreshTimer.setAutoRun(automaticRedrawCheckBox.isSelected());
+            storeVarInFile("examples/lastAutoDraw", automaticRedrawCheckBox.isSelected() + "");
         });
         redrawButton.addActionListener(e -> updateGraphView());
         jungPanel.addNodeClickedHandler(this::updateNodeSelection);
         storeSelectComboBox.addActionListener(a -> {
-            if (inComboxBoxHandler) {
+            if (inLoadComboxBoxHandler) {
                 return;
             }
             String name = (String) storeSelectComboBox.getSelectedItem();
@@ -159,19 +147,46 @@ public class BasicUI {
             }
             storeLastName(name);
             load(name);
-            inComboxBoxHandler = true;
+            inLoadComboxBoxHandler = true;
             storeSelectComboBox.setSelectedItem(getLastName());
-            inComboxBoxHandler = false;
+            inLoadComboxBoxHandler = false;
         });
         String lastContent = getLastContent();
-        inComboxBoxHandler = true;
-        storeSelectComboBox.setSelectedItem(getLastName());
-        if (getLastContent() != null) {
-            setProgram(lastContent);
-        } else {
-            load(getLastName());
+        inLoadComboxBoxHandler = true;
+        for (String n : getExampleNames()) {
+            storeSelectComboBox.addItem(n);
         }
-        inComboxBoxHandler = false;
+        storeSelectComboBox.setSelectedItem(getLastName());
+        inLoadComboxBoxHandler = false;
+        methodHandlerSelectionComboxBox.addActionListener(a -> {
+            if (inMHComboxBoxHandler) {
+                return;
+            }
+            String props = (String) methodHandlerSelectionComboxBox.getSelectedItem();
+            try {
+                MethodInvocationHandler.parse(props);
+                methodHandlerSelectionComboxBox.removeAllItems();
+                storeMethodHandlerPropString(props);
+                for (String n : getExampleMethodHandlerPropStrings()) {
+                    methodHandlerSelectionComboxBox.addItem(n);
+                }
+                inMHComboxBoxHandler = true;
+                methodHandlerSelectionComboxBox.setSelectedItem(props);
+                inMHComboxBoxHandler = false;
+                processRefreshTimer.request();
+            } catch (NildumuError e) {
+                parserErrorLabel.setText(e.getMessage());
+                addOutput(e.getMessage());
+                e.printStackTrace();
+            }
+        });
+        String props = getVarContent("examples/lastMHProps", MethodInvocationHandler.getDefaultPropString());
+        inMHComboxBoxHandler = true;
+        for (String n : getExampleMethodHandlerPropStrings()) {
+            methodHandlerSelectionComboxBox.addItem(n);
+        }
+        methodHandlerSelectionComboxBox.setSelectedItem(props);
+        inMHComboxBoxHandler = false;
         storeButton.addActionListener(a -> store((String) storeSelectComboBox.getSelectedItem()));
         storeJsonButton.addActionListener(e -> {
             JFileChooser fileChooser = new JFileChooser();
@@ -186,6 +201,24 @@ public class BasicUI {
         pruneCheckBox.addActionListener(e -> {
             graphViewRefreshTimer.request();
         });
+        stopButton.addActionListener(e -> {
+            processRefreshTimer.abort();
+            graphViewRefreshTimer.abort();
+        });
+        runButton.addActionListener(e -> {
+            new Thread(() -> {
+                processRefreshTimer.abort();
+                String oldText = runButton.getText();
+                runButton.setText("…");
+                processRefreshTimer.run();
+                runButton.setText(oldText);
+            }).start();
+        });
+        autoRunCheckBox.addActionListener(e -> {
+            processRefreshTimer.setAutoRun(autoRunCheckBox.isSelected());
+            storeVarInFile("examples/lastAutoRun", autoRunCheckBox.isSelected() + "");
+        });
+        inputArea.setText(lastContent);
     }
 
     public void processAndUpdate(String program) {
@@ -202,8 +235,9 @@ public class BasicUI {
             inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
         }
         try {
+            ssaArea.setText(Parser.process(program).toPrettyString());
             Context.Mode mode = (Context.Mode) modeComboBox.getSelectedItem();
-            Context c = Processor.process(program, mode);
+            Context c = Processor.process(program, mode, MethodInvocationHandler.parse(methodHandlerSelectionComboxBox.getSelectedItem().toString()));
             if (context == null || c.sl != context.sl) {
                 context = c;
                 updateSecLattice();
@@ -212,9 +246,47 @@ public class BasicUI {
             updateLeakageTable(context);
             updateNodeValueTable(context);
             updateVariableValueTable(context);
-            ssaArea.setText(Parser.process(program).toPrettyString());
             graphViewRefreshTimer.request();
             context.checkInvariants();
+        } catch (LocatedSWPException e) {
+            parserErrorLabel.setText(e.getMessage());
+            Location errorLocation = e.errorToken.location;
+            int startOffset = 0;
+            try {
+                startOffset = inputArea.getLineStartOffset(errorLocation.line - 1) + errorLocation.column;
+                syntaxErrorHighlightTag = inputArea.getHighlighter().addHighlight(startOffset, startOffset + e.errorToken.value.length(), new SquiggleUnderlineHighlightPainter(Color.red));
+                inputArea.invalidate();
+                inputArea.repaint();
+            } catch (BadLocationException e1) {
+                e1.printStackTrace();
+            }
+        } catch (Parser.MJError e) {
+            parserErrorLabel.setText(e.getMessage());
+        } catch (NildumuError e) {
+            addOutput(e.getMessage());
+            parserErrorLabel.setText(e.getMessage());
+        } catch (RuntimeException e) {
+            parserErrorLabel.setText(e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    void parse() {
+        parserErrorLabel.setText("");
+        String program = inputArea.getText();
+        if (program.isEmpty()) {
+            return;
+        }
+        storeLastContent(program);
+        clearOutput();
+        if (syntaxErrorHighlightTag != null) {
+            inputArea.getHighlighter().removeHighlight(syntaxErrorHighlightTag);
+        }
+        if (nodeSelectHighlightTag != null) {
+            inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
+        }
+        try {
+            ssaArea.setText(Parser.process(program).toPrettyString());
         } catch (LocatedSWPException e) {
             parserErrorLabel.setText(e.getMessage());
             Location errorLocation = e.errorToken.location;
@@ -286,8 +358,12 @@ public class BasicUI {
         panel1 = new JPanel();
         panel1.setLayout(new GridLayoutManager(2, 1, new Insets(0, 0, 0, 0), -1, -1));
         final JSplitPane splitPane1 = new JSplitPane();
+        splitPane1.setContinuousLayout(false);
+        splitPane1.setDividerLocation(614);
+        splitPane1.setOneTouchExpandable(true);
         panel1.add(splitPane1, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, new Dimension(200, 200), null, 0, false));
         final JSplitPane splitPane2 = new JSplitPane();
+        splitPane2.setContinuousLayout(true);
         splitPane2.setOrientation(0);
         splitPane1.setLeftComponent(splitPane2);
         final JTabbedPane tabbedPane1 = new JTabbedPane();
@@ -331,47 +407,74 @@ public class BasicUI {
         variableValueTable.setAutoResizeMode(2);
         variableValueScrollPane.setViewportView(variableValueTable);
         final JPanel panel4 = new JPanel();
-        panel4.setLayout(new GridLayoutManager(2, 2, new Insets(0, 0, 0, 0), -1, -1));
+        panel4.setLayout(new GridLayoutManager(3, 9, new Insets(0, 0, 0, 0), -1, -1));
         splitPane2.setLeftComponent(panel4);
+        final JPanel panel5 = new JPanel();
+        panel5.setLayout(new BorderLayout(0, 0));
+        panel4.add(panel5, new GridConstraints(1, 0, 1, 9, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
         inputScrollArea = new RTextScrollPane();
         inputScrollArea.setMinimumSize(new Dimension(200, 200));
         inputScrollArea.setPreferredSize(new Dimension(400, 200));
-        panel4.add(inputScrollArea, new GridConstraints(1, 0, 1, 2, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
+        panel5.add(inputScrollArea, BorderLayout.CENTER);
         inputArea = new RSyntaxTextArea();
+        inputArea.setCloseCurlyBraces(true);
+        inputArea.setCodeFoldingEnabled(true);
+        inputArea.setPaintMarkOccurrencesBorder(true);
+        inputArea.setPaintMatchedBracketPair(true);
         inputScrollArea.setViewportView(inputArea);
+        final JPanel panel6 = new JPanel();
+        panel6.setLayout(new GridLayoutManager(1, 5, new Insets(0, 0, 0, 0), -1, -1));
+        panel4.add(panel6, new GridConstraints(2, 0, 1, 9, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
+        runButton = new JButton();
+        runButton.setText("\uD83E\uDC92");
+        runButton.setToolTipText("Request processing of the program");
+        panel6.add(runButton, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(10, -1), null, 0, false));
+        stopButton = new JButton();
+        stopButton.setText("\u23F9");
+        panel6.add(stopButton, new GridConstraints(0, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(10, -1), null, 0, false));
+        modeComboBox = new JComboBox();
+        panel6.add(modeComboBox, new GridConstraints(0, 3, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        autoRunCheckBox = new JCheckBox();
+        autoRunCheckBox.setText("\u2B94");
+        autoRunCheckBox.setToolTipText("Auto run the processing of the program");
+        panel6.add(autoRunCheckBox, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        methodHandlerSelectionComboxBox = new JComboBox();
+        panel6.add(methodHandlerSelectionComboxBox, new GridConstraints(0, 4, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        final JPanel panel7 = new JPanel();
+        panel7.setLayout(new GridLayoutManager(1, 9, new Insets(0, 0, 0, 0), -1, -1));
+        panel4.add(panel7, new GridConstraints(0, 0, 1, 9, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
         storeSelectComboBox = new JComboBox();
         storeSelectComboBox.setEditable(true);
         final DefaultComboBoxModel defaultComboBoxModel1 = new DefaultComboBoxModel();
         storeSelectComboBox.setModel(defaultComboBoxModel1);
-        panel4.add(storeSelectComboBox, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel7.add(storeSelectComboBox, new GridConstraints(0, 0, 1, 8, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         storeButton = new JButton();
-        storeButton.setText("store");
-        panel4.add(storeButton, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        final JPanel panel5 = new JPanel();
-        panel5.setLayout(new GridLayoutManager(2, 7, new Insets(0, 0, 0, 0), -1, -1));
-        splitPane1.setRightComponent(panel5);
+        storeButton.setText("\uD83D\uDDAA");
+        storeButton.setToolTipText("Store the program as an example");
+        panel7.add(storeButton, new GridConstraints(0, 8, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(5, -1), null, 0, false));
+        final JPanel panel8 = new JPanel();
+        panel8.setLayout(new GridLayoutManager(2, 10, new Insets(0, 0, 0, 0), -1, -1));
+        splitPane1.setRightComponent(panel8);
         jungPanel = new JungPanel();
-        panel5.add(jungPanel, new GridConstraints(0, 0, 1, 7, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(2000, 2000), null, 0, false));
+        panel8.add(jungPanel, new GridConstraints(0, 0, 1, 10, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(2000, 2000), null, 0, false));
         attackerSecLevelInput = new JComboBox();
-        panel5.add(attackerSecLevelInput, new GridConstraints(1, 6, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(50, -1), null, 0, false));
+        panel8.add(attackerSecLevelInput, new GridConstraints(1, 9, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(50, -1), null, 0, false));
         resetButton = new JButton();
         resetButton.setText("reset");
-        panel5.add(resetButton, new GridConstraints(1, 5, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel8.add(resetButton, new GridConstraints(1, 8, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         automaticRedrawCheckBox = new JCheckBox();
         automaticRedrawCheckBox.setSelected(true);
         automaticRedrawCheckBox.setText("Redraw automatically");
-        panel5.add(automaticRedrawCheckBox, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel8.add(automaticRedrawCheckBox, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         redrawButton = new JButton();
         redrawButton.setText("Redraw");
-        panel5.add(redrawButton, new GridConstraints(1, 4, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel8.add(redrawButton, new GridConstraints(1, 7, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         storeJsonButton = new JButton();
         storeJsonButton.setText("Store json");
-        panel5.add(storeJsonButton, new GridConstraints(1, 3, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        modeComboBox = new JComboBox();
-        panel5.add(modeComboBox, new GridConstraints(1, 2, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel8.add(storeJsonButton, new GridConstraints(1, 6, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         pruneCheckBox = new JCheckBox();
         pruneCheckBox.setText("Prune");
-        panel5.add(pruneCheckBox, new GridConstraints(1, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel8.add(pruneCheckBox, new GridConstraints(1, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         parserErrorLabel = new JLabel();
         parserErrorLabel.setText("Label");
         panel1.add(parserErrorLabel, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
@@ -543,24 +646,6 @@ public class BasicUI {
         inputArea.getDocument().addDocumentListener(documentListener);
     }
 
-    public static void main(String[] args) {
-        JFrame frame = new JFrame();
-        BasicUI ui = new BasicUI();
-        frame.getContentPane().add(ui.panel1);
-        frame.pack();
-        frame.setSize(1500, 800);
-        frame.setVisible(true);
-        //ui.setProgram("h input int l = 0b0u; l output int o = l;");
-        frame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-        while (frame.isVisible()) {
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
     private CompletionProvider createCompletionProvider() {
 
         DefaultCompletionProvider provider = new DefaultCompletionProvider();
@@ -643,7 +728,7 @@ public class BasicUI {
 
     private String getVarContent(String var, String defaultContent) {
         try {
-            return String.join("\n", Files.readAllLines(Paths.get(var)));
+            return Files.readAllLines(Paths.get(var)).stream().filter(s -> !s.isEmpty()).collect(Collectors.joining("\n"));
         } catch (IOException e) {
         }
         return defaultContent;
@@ -685,5 +770,41 @@ public class BasicUI {
             parserErrorLabel.setText(exp.getMessage());
             exp.printStackTrace();
         }
+    }
+
+
+    public static void main(String[] args) {
+        JFrame frame = new JFrame();
+        BasicUI ui = new BasicUI();
+        frame.getContentPane().add(ui.panel1);
+        frame.pack();
+        frame.setSize(1500, 800);
+        frame.setVisible(true);
+        //ui.setProgram("h input int l = 0b0u; l output int o = l;");
+        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        while (frame.isVisible()) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void storeMethodHandlerPropString(String props) {
+        if (!getExampleMethodHandlerPropStrings().contains(props)) {
+            List<String> ownProps = new ArrayList<>(Arrays.asList(getVarContent("examples/mhprops", "").split("\n")));
+            ownProps.add(props);
+            storeVarInFile("examples/mhprops", String.join("\n", ownProps));
+        }
+    }
+
+    private List<String> getExampleMethodHandlerPropStrings() {
+        List<String> props = new ArrayList<>(MethodInvocationHandler.getExamplePropLines());
+        String stored = getVarContent("examples/mhprops", "");
+        if (!stored.isEmpty()) {
+            props.addAll(Arrays.asList(stored.split("\n")));
+        }
+        return props;
     }
 }

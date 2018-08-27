@@ -1,18 +1,13 @@
 package swp.lexer.automata;
 
-import swp.util.Utils;
-import swp.lexer.lr.StringTerminals;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.util.*;
-import java.util.function.BiFunction;
-import java.util.function.Function;
+import java.util.function.*;
+
+import swp.lexer.lr.StringTerminals;
+import swp.util.Utils;
 
 import static swp.util.Utils.Triple;
 

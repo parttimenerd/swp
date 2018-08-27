@@ -1,7 +1,6 @@
 package swp;
 
-import swp.lexer.Location;
-import swp.lexer.Token;
+import swp.lexer.*;
 
 public class LocatedSWPException extends SWPException {
 

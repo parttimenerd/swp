@@ -1,21 +1,12 @@
 package nildumu;
 
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.Stack;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import swp.util.Pair;
 
+import static nildumu.Lattices.B.*;
 import static nildumu.Lattices.*;
-import static nildumu.Lattices.B.ONE;
-import static nildumu.Lattices.B.U;
-import static nildumu.Lattices.B.ZERO;
 import static nildumu.Parser.*;
 
 public class Processor {
@@ -25,8 +16,12 @@ public class Processor {
     }
 
     public static Context process(String program, Context.Mode mode){
+        return process(program, mode, MethodInvocationHandler.createDefault());
+    }
+
+    public static Context process(String program, Context.Mode mode, MethodInvocationHandler handler){
         ProgramNode node = parse(program);
-        return process(node.context.mode(mode), node);
+        return process(node.context.mode(mode).methodInvocationHandler(handler), node);
     }
 
     public static Context process(Context context, MJNode node) {
@@ -45,6 +40,13 @@ public class Processor {
             final Map<MJNode, Value> oldValues = new HashMap<>();
 
             final Stack<Long> nodeValueUpdatesAtCondition = new Stack<>();
+
+            final Map<MJNode, Long> lastUpdateCounts = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<MJNode, Long>() {
+                @Override
+                public Long defaultValue(Map<MJNode, Long> map, MJNode key) {
+                    return 0l;
+                }
+            });
 
             boolean didValueChangeAndUpdate(MJNode node, Value newValue){
                 if (oldValues.containsKey(node) && oldValues.get(node) == newValue){
@@ -98,7 +100,11 @@ public class Processor {
                     context.pushMods(bitPair.first, bitPair.second);
                     nodeValueUpdatesAtCondition.push(context.getNodeValueUpdateCount());
                 }
-                return false;
+                if (lastUpdateCounts.get(block) == context.getNodeValueUpdateCount()) {
+                    return false;
+                }
+                lastUpdateCounts.put(block, context.getNodeValueUpdateCount());
+                return true;
             }
 
             @Override
@@ -118,8 +124,11 @@ public class Processor {
                 } else {
                     statementNodesToOmitOneTime.add(whileStatement.body);
                 }
-                nodeValueUpdatesAtCondition.push(context.getNodeValueUpdateCount());
-                return didValueChangeAndUpdate(whileStatement, cond);
+                if (didValueChangeAndUpdate(whileStatement, cond)) {
+                    nodeValueUpdatesAtCondition.push(context.getNodeValueUpdateCount());
+                    return true;
+                }
+                return false;
             }
 
             @Override
@@ -135,6 +144,19 @@ public class Processor {
                 return nodeValueUpdatesAtCondition.pop() != context.getNodeValueUpdateCount();
             }
 
+            @Override
+            public Boolean visit(MethodInvocationNode methodInvocation) {
+                System.out.printf("%s(%s)", methodInvocation.definition.name, methodInvocation.arguments.arguments.stream().map(context::nodeValue).map(Value::toString).collect(Collectors.joining(", ")));
+                return false;
+            }
+
+            @Override
+            public Boolean visit(ReturnStatementNode returnStatement) {
+                if (returnStatement.hasReturnExpression()){
+                    context.setReturnValue(context.nodeValue(returnStatement.expression));
+                }
+                return false;
+            }
         }, context::evaluate, node, statementNodesToOmitOneTime);
         return context;
     }

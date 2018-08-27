@@ -1,21 +1,13 @@
 package nildumu;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import swp.util.Pair;
 
-import static nildumu.Lattices.*;
+import static nildumu.Lattices.Sec;
 import static nildumu.LeakageCalculation.rule;
 import static nildumu.ui.ViewImage.view;
 

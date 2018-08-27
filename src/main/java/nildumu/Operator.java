@@ -3,25 +3,15 @@ package nildumu;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.time.temporal.ValueRange;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.Stack;
+import java.util.*;
 import java.util.function.BiPredicate;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
+import java.util.stream.*;
 
 import swp.util.Pair;
 
-import static nildumu.Context.c;
 import static nildumu.Context.v;
 import static nildumu.Lattices.*;
-import static nildumu.Lattices.B.ONE;
-import static nildumu.Lattices.B.U;
-import static nildumu.Lattices.B.ZERO;
+import static nildumu.Lattices.B.*;
 
 public interface Operator {
 
@@ -782,6 +772,29 @@ public interface Operator {
     };
 
     static final BitWiseBinaryOperatorStructured PHI = new BitWiseBinaryOperatorStructured("phi") {
+
+        @Override
+        Bit compute(Context c, Bit x, Bit y) {
+            if (x == bl.bot){
+                return y;
+            } else if (y == bl.bot){
+                return x;
+            } else if (x == y){
+                return x;
+            }
+            Parser.PhiNode phi = (Parser.PhiNode)currentNode;
+            if (phi.controlDeps.size() == 1){
+                B condVal = c.nodeValue(phi.controlDeps.get(0)).get(1).val;
+                switch (condVal){
+                    case ONE:
+                        return x;
+                    case ZERO:
+                        return y;
+                }
+            }
+            return super.compute(c, x, y);
+        }
+
         @Override
         public Lattices.B computeBitValue(Bit x, Bit y) {
             return bs.sup(x.val, y.val);
@@ -827,6 +840,18 @@ public interface Operator {
     static final BitWiseOperator PHI_GENERIC = new BitWiseOperatorStructured("phi") {
 
         @Override
+        Bit computeBit(Context c, List<Bit> bits) {
+            List<Bit> nonBots = bits.stream().filter(b -> b != bl.bot()).collect(Collectors.toList());
+            if (nonBots.size() == 1){
+                return nonBots.get(0);
+            }
+            if (bits.size() > 0 && bits.stream().filter(b -> b != bits.get(0)).count() == 0){
+                return bits.get(0);
+            }
+            return super.computeBit(c, bits);
+        }
+
+        @Override
         public Lattices.B computeBitValue(List<Bit> bits) {
             return bs.sup(bits.stream().map(b -> b.val));
         }
@@ -861,7 +886,7 @@ public interface Operator {
         Value compute(Context c, Value first, Value second) {
             List<Bit> res = new ArrayList<>();
             Util.Box<Bit> carry = new Util.Box<>(Bit.ZERO);
-            return  vl.mapBitsToValue(first, second, (a, b) -> {
+            return  vl.mapBitsToValue(first.extend(first.size() + 1), second.extend(second.size() + 1), (a, b) -> {
                 Pair<Bit, Bit> add = fullAdder(c, a, b, carry.val);
                 carry.val = add.second;
                 return add.first;
@@ -880,22 +905,35 @@ public interface Operator {
         }
     };
 
-    /**
-     * TODO: not the canonical implementation
-     */
-    static final BinaryOperator MINUS = new BinaryOperator("-") {
-        @Override
-        Value compute(Context c, Value first, Value second) {
-            return ADD.compute(c, first, NOT.compute(c, second));
-        }
-    };
-
     static final BinaryOperator MULTIPLY = new BinaryOperator("*") {
         @Override
         Value compute(Context c, Value first, Value second) {
             throw new NotImplementedException();
         }
     };
+
+    public static class MethodInvocation implements Operator {
+
+        final Parser.MethodNode method;
+
+        public MethodInvocation(Parser.MethodNode method) {
+            this.method = method;
+        }
+
+        @Override
+        public Value compute(Context c, List<Value> arguments) {
+            if (!method.hasReturnValue()){
+                System.err.println("Called method without return statement: " + method);
+                return vl.bot();
+            }
+            return c.methodInvocationHandler().analyze(c, method, arguments);
+        }
+
+        @Override
+        public String toString(List<Value> arguments) {
+            return String.format("%s(%s)", method.name, arguments.stream().map(Value::toString).collect(Collectors.joining(",")));
+        }
+    }
 
     default Value compute(Context c, List<Value> arguments){
         throw new NotImplementedException();

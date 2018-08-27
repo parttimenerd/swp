@@ -1,13 +1,11 @@
 package swp.lexer.automata;
 
-import swp.util.Utils;
+import java.io.*;
+import java.util.*;
+
 import swp.lexer.*;
 import swp.lexer.alphabet.AlphabetLexer;
-
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
+import swp.util.Utils;
 
 /**
  * Created by parttimenerd on 03.08.16.

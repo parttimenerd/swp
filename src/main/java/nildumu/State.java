@@ -1,9 +1,6 @@
 package nildumu;
 
-import java.util.HashMap;
-import java.util.IdentityHashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static nildumu.Lattices.*;
@@ -12,6 +9,8 @@ import static nildumu.Lattices.*;
  * State of the variables
  */
 class State {
+
+    private Value returnValue = vl.bot();
 
     private final DefaultMap<String, Value> map = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<String, Value>() {
         @Override
@@ -43,5 +42,13 @@ class State {
 
     public Set<String> variableNames(){
         return map.keySet();
+    }
+
+    public Value getReturnValue(){
+        return returnValue;
+    }
+
+    public void setReturnValue(Value value){
+        this.returnValue = value;
     }
 }

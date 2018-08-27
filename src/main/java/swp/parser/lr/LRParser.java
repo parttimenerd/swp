@@ -1,19 +1,11 @@
 package swp.parser.lr;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import swp.SWPException;
-import swp.grammar.Grammar;
-import swp.grammar.NonTerminal;
-import swp.lexer.Lexer;
-import swp.lexer.Token;
-import swp.util.Pair;
-import swp.util.ParserError;
-import swp.util.Utils;
+import swp.grammar.*;
+import swp.lexer.*;
+import swp.util.*;
 
 /**
  * Implements an LR(1) parser.

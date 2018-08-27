@@ -1,18 +1,12 @@
 package swp.util;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
+import java.io.*;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import swp.SWPException;
-import swp.lexer.Lexer;
-import swp.lexer.Location;
+import swp.lexer.*;
 
 /**
  * Class with utility methods...

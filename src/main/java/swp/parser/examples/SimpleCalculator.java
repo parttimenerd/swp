@@ -1,17 +1,12 @@
 package swp.parser.examples;
 
-import swp.grammar.Grammar;
-import swp.grammar.GrammarBuilder;
-import swp.lexer.Lexer;
-import swp.lexer.Token;
-import swp.lexer.automata.Automaton;
-import swp.lexer.automata.AutomatonLexer;
-import swp.lexer.automata.Table;
-import swp.parser.lr.*;
-
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+
+import swp.grammar.*;
+import swp.lexer.*;
+import swp.lexer.automata.*;
+import swp.parser.lr.*;
 
 /**
  * Different ways to implement a simple calculator.

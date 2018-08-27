@@ -1,7 +1,6 @@
 package nildumu;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Known as <em>Definition</em> in the compiler lab.

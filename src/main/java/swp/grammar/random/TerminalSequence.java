@@ -1,8 +1,8 @@
 package swp.grammar.random;
 
-import swp.grammar.Terminal;
-
 import java.util.ArrayList;
+
+import swp.grammar.Terminal;
 
 /**
  * Created by parttimenerd on 18/10/16.

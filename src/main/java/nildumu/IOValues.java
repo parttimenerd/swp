@@ -1,19 +1,12 @@
 package nildumu;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import swp.util.Pair;
 
-import static nildumu.Lattices.*;
 import static nildumu.DefaultMap.ForbiddenAction.*;
+import static nildumu.Lattices.*;
 
 /**
  * Contains the bits that are marked as input or output, that have an unknown value

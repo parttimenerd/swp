@@ -1,15 +1,11 @@
 package swp.lexer.automata;
 
-import swp.util.Pair;
-import swp.util.Utils;
-
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.file.*;
+import java.util.*;
 import java.util.stream.Collectors;
+
+import swp.util.*;
 
 /**
  * Written for a practical assignment. Allows the processing of lexer grammar files.

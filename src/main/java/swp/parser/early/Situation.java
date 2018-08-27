@@ -1,8 +1,8 @@
 package swp.parser.early;
 
-import swp.grammar.*;
-
 import java.util.List;
+
+import swp.grammar.*;
 
 /**
  * Created by parttimenerd on 07.07.16.

@@ -3,26 +3,14 @@ package swp.grammar;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Stack;
+import java.util.*;
 import java.util.function.Consumer;
 
 import swp.SWPException;
-import swp.lexer.Lexer;
-import swp.lexer.TerminalSet;
-import swp.lexer.Token;
-import swp.lexer.automata.AutomatonLexer;
-import swp.lexer.automata.LexerDescriptionParser;
-import swp.lexer.automata.Table;
-import swp.parser.lr.BaseAST;
-import swp.parser.lr.Graph;
-import swp.parser.lr.LRParser;
-import swp.parser.lr.LRParserTable;
-import swp.parser.lr.ListAST;
-import swp.util.Pair;
-import swp.util.SerializableBiFunction;
-import swp.util.SerializableFunction;
+import swp.lexer.*;
+import swp.lexer.automata.*;
+import swp.parser.lr.*;
+import swp.util.*;
 
 /**
  * Allows parsing of grammar right hand sides (written in a variant of EBNF):

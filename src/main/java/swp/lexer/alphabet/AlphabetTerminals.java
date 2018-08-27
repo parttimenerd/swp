@@ -1,11 +1,9 @@
 package swp.lexer.alphabet;
 
-import swp.util.Utils;
-import swp.lexer.TerminalSet;
+import java.util.*;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import swp.lexer.TerminalSet;
+import swp.util.Utils;
 
 /**
  * Set of (printable) ASCII letters.

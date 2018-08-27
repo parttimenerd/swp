@@ -24,8 +24,8 @@ The following gif is a construction GIF for the LARL automaton of the grammar
 ![Automaton construction GIF](img/example.gif)
 
 
-This branch contains the nildumu project (my master thesis project)
-as sub package.
+This branch contains the nildumu project (part of my master thesis)
+as a sub package.
 
 
 It's licensed under the GPLv3 and MIT license.

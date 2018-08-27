@@ -1,8 +1,6 @@
 package swp.util;
 
 import swp.LocatedSWPException;
-import swp.SWPException;
-import swp.lexer.Location;
 import swp.lexer.Token;
 
 /**

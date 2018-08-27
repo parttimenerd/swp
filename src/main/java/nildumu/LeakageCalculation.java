@@ -1,37 +1,18 @@
 package nildumu;
 
-import sun.security.provider.certpath.Vertex;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.stream.*;
 
 import edu.uci.ics.jung.algorithms.flows.EdmondsKarpMaxFlow;
-import edu.uci.ics.jung.graph.DirectedGraph;
-import edu.uci.ics.jung.graph.DirectedSparseGraph;
+import edu.uci.ics.jung.graph.*;
 import edu.uci.ics.jung.graph.util.EdgeType;
 import swp.util.Pair;
 
-import static nildumu.Context.INFTY;
-import static nildumu.Context.c;
-import static nildumu.Context.d;
-import static nildumu.Context.v;
-import static nildumu.DefaultMap.ForbiddenAction.FORBID_DELETIONS;
-import static nildumu.DefaultMap.ForbiddenAction.FORBID_VALUE_UPDATES;
+import static nildumu.Context.*;
+import static nildumu.DefaultMap.ForbiddenAction.*;
 import static nildumu.Lattices.B.X;
-import static nildumu.Lattices.Bit;
-import static nildumu.Lattices.BitLattice;
-import static nildumu.Lattices.Lattice;
-import static nildumu.Lattices.Sec;
-import static nildumu.Lattices.SecurityLattice;
-import static nildumu.Lattices.Value;
+import static nildumu.Lattices.*;
 
 public class LeakageCalculation {
 

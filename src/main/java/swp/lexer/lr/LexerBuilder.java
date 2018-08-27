@@ -1,17 +1,13 @@
 package swp.lexer.lr;
 
-import swp.util.Utils;
-import swp.grammar.Grammar;
-import swp.grammar.GrammarBuilder;
-import swp.lexer.ListLexer;
-import swp.lexer.Token;
-import swp.lexer.alphabet.AlphabetLexer;
-import swp.lexer.alphabet.AlphabetTerminals;
-import swp.parser.lr.*;
-
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.function.Function;
+
+import swp.grammar.*;
+import swp.lexer.*;
+import swp.lexer.alphabet.*;
+import swp.parser.lr.*;
+import swp.util.Utils;
 
 /**
  * "EOF" is the default token signaling the end of input, uses the alphabet lexer under the hood

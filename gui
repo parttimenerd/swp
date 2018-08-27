@@ -12,4 +12,5 @@ esac
 
 PROJECT_DIR=$(dirname "$SCRIPT_PATH")
 
-java -classpath "$PROJECT_DIR/target/classes/" swp.lexer.automata.EnumTableGenerator $@
+cd "$PROJECT_DIR"
+mvn exec:java -Dgui

@@ -9,3 +9,5 @@ material (https://pp.ipd.kit.edu/lehre/WS201617/compprakt/)
 
 It is based, and developed alongside, my master thesis.
 A working draft can be found at https://git.scc.kit.edu/uqddy/ma.
+
+Run a basic UI via the `gui` script in the main directory.

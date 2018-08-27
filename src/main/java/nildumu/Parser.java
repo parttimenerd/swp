@@ -2,19 +2,14 @@ package nildumu;
 
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
-import swp.SWPException;
-import swp.lexer.Lexer;
-import swp.lexer.Location;
-import swp.lexer.Token;
-import swp.parser.lr.BaseAST;
-import swp.parser.lr.Generator;
-import swp.parser.lr.ListAST;
-import swp.util.Utils;
-
 import java.io.Serializable;
 import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.stream.*;
+
+import swp.SWPException;
+import swp.lexer.*;
+import swp.parser.lr.*;
+import swp.util.Utils;
 
 import static nildumu.Lattices.*;
 import static nildumu.Parser.LexerTerminal.*;
@@ -121,7 +116,7 @@ public class Parser implements Serializable {
      * Change the id, when changing the parser oder replace the id by {@code null} to build the parser and lexer
      * every time (takes long)
      */
-    static Generator generator = Generator.getCachedIfPossible("stuff/blaer54i44u7sf2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
+    public static Generator generator = Generator.getCachedIfPossible("stuff/blae54r6r55344474i446u7s5f2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
             (builder) -> {
                 builder.addRule("program", "use_sec? lines", asts -> {
                             MJNode.resetIdCounter();
@@ -194,27 +189,31 @@ public class Parser implements Serializable {
                                     (IntegerLiteralNode)asts.get(5),
                                     asts.get(0).getMatchedString());
                         })
-                        .addRule("method", "INT IDENT LPAREN parameters RPAREN block", asts -> {
+                        .addRule("method", "INT IDENT LPAREN parameters RPAREN method_body", asts -> {
                             return new MethodNode(asts.get(0).getMatchedTokens().get(0).location,
-                                    asts.get(2).getMatchedString(),
-                                    (ParametersNode)asts.get(4), (BlockNode)asts.get(6));
+                                    asts.get(1).getMatchedString(),
+                                    (ParametersNode)asts.get(3), (BlockNode)asts.get(5));
                         })
                         .addRule("parameters", "", asts -> new ParametersNode(new Location(0, 0), new ArrayList<>()))
                         .addRule("parameters", "parameter COMMA parameters", asts -> {
-                            ParametersNode node = new ParametersNode(asts.getStartLocation(), Utils.makeArrayList((ParameterNode)asts.get(0)));
+                            ParameterNode param = (ParameterNode)asts.get(0);
+                            ParametersNode node = new ParametersNode(param.location, Utils.makeArrayList(param));
                             node.parameterNodes.addAll(((ParametersNode)asts.get(2)).parameterNodes);
                             return node;
                         })
                         .addRule("parameters", "parameter", asts -> {
-                            return new ParametersNode(asts.getStartLocation(), Utils.makeArrayList((ParameterNode)asts.get(0)));
+                            ParameterNode param = (ParameterNode)asts.get(0);
+                            return new ParametersNode(param.location, Utils.makeArrayList(param));
                         })
                         .addRule("parameter", "INT IDENT", asts -> {
                             return new ParameterNode(asts.getStartLocation(), asts.get(1).getMatchedString());
                         })
-                        .addEitherRule("statement", "block",
-                                "return_statement")
-
+                        .addEitherRule("statement", "block")
+                        .addRule("expression_statement", "expression", asts -> {
+                            return new ExpressionStatementNode((ExpressionNode)asts.get(0));
+                        })
                         .addRule("block", "LCURLY block_statements RCURLY", asts -> new BlockNode(asts.get(0).getMatchedTokens().get(0).location, asts.get(1).<WrapperNode<List<StatementNode>>>as().wrapped))
+                        .addRule("method_body", "LCURLY method_block_statements RCURLY", asts -> new BlockNode(asts.get(0).getMatchedTokens().get(0).location, asts.get(1).<WrapperNode<List<StatementNode>>>as().wrapped))
                         .addRule("block_statements", "block_statement_w_semi block_statements", asts -> {
                             WrapperNode<List<StatementNode>> left = (WrapperNode<List<StatementNode>>) asts.get(1);
                             StatementNode right = (StatementNode)asts.getAs(0);
@@ -227,16 +226,33 @@ public class Parser implements Serializable {
                         .addRule("block_statements", "", asts -> {
                             return new WrapperNode<>(new Location(0, 0), new ArrayList<>());
                         })
+                        .addRule("method_block_statements", "block_statement_w_semi method_block_statements", asts -> {
+                            WrapperNode<List<StatementNode>> left = (WrapperNode<List<StatementNode>>) asts.get(1);
+                            StatementNode right = (StatementNode)asts.getAs(0);
+                            left.wrapped.add(0, right);
+                            return left;
+                        })
+                        .addRule("method_block_statements", "block_statement", asts -> {
+                            return new WrapperNode<>(((MJNode)asts.get(0)).location, new ArrayList<>(Collections.singleton(asts.get(0))));
+                        })
+                        .addRule("method_block_statements", "return_statement SEMICOLON?", asts -> {
+                            return new WrapperNode<>(((MJNode)asts.get(0)).location, new ArrayList<>(Collections.singleton(asts.get(0))));
+                        })
+                        .addRule("method_block_statements", "", asts -> {
+                            return new WrapperNode<>(new Location(0, 0), new ArrayList<>());
+                        })
                         .addRule("block_statement_w_semi", "statement SEMICOLON", asts -> asts.get(0))
                         .addRule("block_statement_w_semi", "var_decl SEMICOLON", asts -> asts.get(0))
                         .addRule("block_statement_w_semi", "local_variable_assignment_statement SEMICOLON", asts -> asts.get(0))
                         .addRule("block_statement_w_semi", "while_statement")
                         .addRule("block_statement_w_semi", " if_statement")
+                        .addRule("block_statement_w_semi", "expression_statement SEMICOLON", asts -> asts.get(0))
                         .addRule("block_statement", "statement", asts -> asts.get(0))
                         .addRule("block_statement", "var_decl", asts -> asts.get(0))
                         .addRule("block_statement", "local_variable_assignment_statement", asts -> asts.get(0))
                         .addRule("block_statement", "while_statement")
-                        .addRule("block_statement", " if_statement")
+                        .addRule("block_statement", "if_statement")
+                        .addRule("block_statement", "expression_statement")
                         .addRule("var_decl", "INT IDENT", asts -> {
                             return new VariableDeclarationNode(
                                     asts.getStartLocation(),
@@ -301,13 +317,18 @@ public class Parser implements Serializable {
                             return new MethodInvocationNode(asts.getStartLocation(), asts.get(0).getMatchedString(),
                                     (ArgumentsNode)asts.get(2));
                         })
+                        .addRule("method_invocation", "IDENT LPAREN expression RPAREN", asts -> {
+                            ExpressionNode arg = (ExpressionNode)asts.get(2);
+                            return new MethodInvocationNode(asts.getStartLocation(), asts.get(0).getMatchedString(),
+                                    new ArgumentsNode(arg.location, Utils.makeArrayList(arg)));
+                        })
                         .addRule("arguments", "", asts -> new ArgumentsNode(new Location(0, 0), new ArrayList<>()))
                         .addRule("arguments", "expression", asts -> {
                             return new ArgumentsNode(((ExpressionNode)asts.get(0)).location, Utils.makeArrayList((ExpressionNode)asts.get(0)));
                         })
-                        .addRule("arguments", "expression COMMA expressions", asts -> {
+                        .addRule("arguments", "expression COMMA arguments", asts -> {
                             List<ExpressionNode> args = Utils.makeArrayList((ExpressionNode)asts.get(0));
-                            ArgumentsNode argsNode = ((ArgumentsNode)asts.get(1));
+                            ArgumentsNode argsNode = ((ArgumentsNode)asts.get(2));
                             args.addAll(argsNode.arguments);
                             return new ArgumentsNode(argsNode.location, args);
                         })
@@ -320,7 +341,7 @@ public class Parser implements Serializable {
                         .addRule("primary_expression", "LPAREN expression RPAREN", asts -> {
                             return asts.get(1);
                         })
-                        .addRule("input_literal", "INPUT_LITERAL", asts -> {
+                        .addRule("input_literal", "INPUT_LITERAL|INTEGER_LITERAL", asts -> {
                             /*List<Bit> rev = asts.get(0).<ListAST<?>>as().stream().map(s -> new Bit(B.U.parse(s.getMatchedString().substring(1)))).collect(Collectors.toList());
                             Collections.reverse(rev);
                             return new IntegerLiteralNode(new Value(rev));*/
@@ -483,6 +504,14 @@ public class Parser implements Serializable {
             return visit((ExpressionNode)primaryExpression);
         }
 
+        default R visit(ExpressionStatementNode expressionStatement){
+            return visit((StatementNode)expressionStatement);
+        }
+
+        default R visit(ReturnStatementNode returnStatement){
+            return visit((ExpressionStatementNode)returnStatement);
+        }
+
         /**
          * Visit all direct children with the visitor and return the results
          */
@@ -493,8 +522,8 @@ public class Parser implements Serializable {
         /**
          * Visit all direct children with the visitor and discard the results
          */
-        default void visitChildrenDiscardReturn(MJNode node){
-            node.children().stream().forEach(c -> ((MJNode)c).accept(this));
+        default void visitChildrenDiscardReturn(MJNode node) {
+            node.children().stream().forEach(c -> ((MJNode) c).accept(this));
         }
     }
 
@@ -537,6 +566,15 @@ public class Parser implements Serializable {
         default R visit(WhileStatementEndNode whileEndStatement){
             return visit((StatementNode)whileEndStatement);
         }
+
+        default R visit(ExpressionStatementNode expressionStatement){
+            return visit((StatementNode)expressionStatement);
+        }
+
+        default R visit(ReturnStatementNode returnStatement){
+            return visit((ExpressionStatementNode)returnStatement);
+        }
+
 
         /**
          * Visit all direct children statements with the visitor and return the results
@@ -860,6 +898,10 @@ public class Parser implements Serializable {
         public String getTextualId() {
             return "m:" + name;
         }
+
+        public boolean hasReturnValue() {
+            return !body.statementNodes.isEmpty() && body.getLastStatementOrNull() instanceof ReturnStatementNode && ((ReturnStatementNode) body.getLastStatementOrNull()).hasReturnExpression();
+        }
     }
 
     /**
@@ -939,6 +981,14 @@ public class Parser implements Serializable {
         public String shortType() {
             return "ps";
         }
+
+        public int size(){
+            return parameterNodes.size();
+        }
+
+        public ParameterNode get(int i){
+            return parameterNodes.get(i);
+        }
     }
 
     /**
@@ -951,8 +1001,8 @@ public class Parser implements Serializable {
 
 
         public ParameterNode(Location location, String name) {
-
             super(location);
+            assert !name.isEmpty();
             this.name = name;
         }
 
@@ -1618,7 +1668,7 @@ public class Parser implements Serializable {
     /**
      * An expression statement that essentially consists of an expression
      */
-    public abstract static class ExpressionStatementNode extends StatementNode {
+    public static class ExpressionStatementNode extends StatementNode {
         public final ExpressionNode expression;
 
         public ExpressionStatementNode(ExpressionNode expression) {
@@ -1644,6 +1694,11 @@ public class Parser implements Serializable {
         @Override
         public List<BaseAST> children() {
             return Utils.makeArrayList(expression);
+        }
+
+        @Override
+        public String shortType() {
+            return ";" + expression.shortType();
         }
 
         @Override
@@ -1770,8 +1825,6 @@ public class Parser implements Serializable {
                     return Operator.XOR;
                 case PLUS:
                     return Operator.ADD;
-                case MINUS:
-                    return Operator.MINUS;
                 case MULTIPLY:
                     return Operator.MULTIPLY;
                 case EQUALS:
@@ -1781,7 +1834,7 @@ public class Parser implements Serializable {
                 case LOWER:
                     return Operator.LESS;
                 default:
-                    throw new UnsupportedOperationException(operator.toString());
+                    return null;
             }
         }
 
@@ -1846,7 +1899,6 @@ public class Parser implements Serializable {
             switch (operator){
                 case INVERT:
                 case TILDE:
-                case MINUS:
                     op = Operator.NOT;
                 default:
                     throw new UnsupportedOperationException(operator.toString());
@@ -1938,6 +1990,14 @@ public class Parser implements Serializable {
         @Override
         public String shortType() {
             return "args";
+        }
+
+        public int size(){
+            return arguments.size();
+        }
+
+        public ExpressionNode get(int i){
+            return arguments.get(i);
         }
     }
 
@@ -2055,7 +2115,7 @@ public class Parser implements Serializable {
 
         @Override
         public List<BaseAST> children() {
-            return Utils.makeArrayList(arguments);
+            return (List<BaseAST>)(List<?>)arguments.arguments;
         }
 
         @Override
@@ -2080,7 +2140,7 @@ public class Parser implements Serializable {
 
         @Override
         public Operator getOperator() {
-            throw new UnsupportedOperationException();
+            return new Operator.MethodInvocation(definition);
         }
 
         @Override

@@ -1,9 +1,9 @@
 package swp.parser.lr;
 
-import swp.util.Utils;
-import swp.lexer.Token;
-
 import java.util.List;
+
+import swp.lexer.Token;
+import swp.util.Utils;
 
 /**
  * Created by parttimenerd on 22.07.16.

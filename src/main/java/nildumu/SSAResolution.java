@@ -1,9 +1,10 @@
 package nildumu;
 
-import swp.parser.lr.BaseAST;
-
 import java.util.*;
+import java.util.function.*;
 import java.util.stream.Collectors;
+
+import swp.parser.lr.BaseAST;
 
 /**
  * Does the conversion of a non SSA to a SSA AST, introduces new phi-nodes and variables
@@ -65,6 +66,14 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
         program.accept(this);
     }
 
+    void pushNewVariablesScope(){
+        newVariables.push(new IdentityHashMap<>());
+    }
+
+    void popNewVariablesScope(){
+        newVariables.pop();
+    }
+
     @Override
     public VisRet visit(Parser.MJNode node) {
         visitChildrenDiscardReturn(node);
@@ -73,8 +82,9 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
 
     @Override
     public VisRet visit(Parser.ProgramNode program) {
-        newVariables.push(new HashMap<>());
+        pushNewVariablesScope();
         visitChildrenDiscardReturn(program);
+        popNewVariablesScope();
         return VisRet.DEFAULT;
     }
 
@@ -109,6 +119,7 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
 
     @Override
     public VisRet visit(Parser.MethodNode method) {
+
         method.parameters.accept(this);
         return method.body.accept(this);
     }
@@ -122,13 +133,13 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
     public VisRet visit(Parser.IfStatementNode ifStatement) {
         visitChildrenDiscardReturn(ifStatement.conditionalExpression);
 
-        newVariables.push(new IdentityHashMap<>());
+        pushNewVariablesScope();
 
         VisRet toAppend = ifStatement.ifBlock.accept(this);
         ifStatement.ifBlock.statementNodes.addAll(toAppend.statementsToAdd);
         Map<Variable, Variable> ifRedefines = newVariables.pop();
 
-        newVariables.push(new IdentityHashMap<>());
+        pushNewVariablesScope();
         toAppend = ifStatement.elseBlock.accept(this);
         ifStatement.elseBlock.statementNodes.addAll(toAppend.statementsToAdd);
         Map<Variable, Variable> elseRedefines = newVariables.pop();
@@ -154,21 +165,22 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
     @Override
     public VisRet visit(Parser.WhileStatementNode whileStatement) {
         visitChildrenCollectReturn(whileStatement.conditionalExpression);
-        newVariables.push(new HashMap<>());
+        pushNewVariablesScope();
         whileStatement.body.accept(this);
         Set<Variable> variablesAssigned = getAssignedOutsideVariables(whileStatement.body);
         Map<Variable, Variable> variableAndWhileEnd = new HashMap<>();
         for (Variable variable : variablesAssigned){
             Variable whileEndVariable = resolve(variable);
             Variable newVariable = create(variable);
-            whileStatement.body.statementNodes.add(0,
-                    new Parser.VariableDeclarationNode(whileStatement.location, newVariable,
-                        new Parser.PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable))));
+            whileStatement.conditionalExpression = replaceVariableWithExpression(variable, new Parser.PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)), whileStatement.conditionalExpression);
+            Parser.VariableDeclarationNode decl = new Parser.VariableDeclarationNode(whileStatement.location, newVariable,
+                    new Parser.PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)));
             replaceVariable(variable, newVariable, whileStatement.body);
+            whileStatement.body.statementNodes.add(0, decl);
             whileStatement.conditionalExpression = replaceVariableWithExpression(variable, new Parser.PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)), whileStatement.conditionalExpression);
             variableAndWhileEnd.put(variable, whileEndVariable);
         }
-        newVariables.pop();
+        popNewVariablesScope();
         return new VisRet(false,
                 variableAndWhileEnd.entrySet().stream().map(e ->
                 new Parser.VariableDeclarationNode(whileStatement.location, create(e.getKey()),
@@ -294,7 +306,7 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
     }
 
     static Parser.ExpressionNode replaceVariableWithExpression(Variable search, Parser.ExpressionNode replacement, Parser.ExpressionNode node){
-        return node.accept(new Parser.NodeVisitor<Parser.ExpressionNode>() {
+        return replace(node.accept(new Parser.NodeVisitor<Parser.ExpressionNode>() {
             @Override
             public Parser.ExpressionNode visit(Parser.MJNode node) {
                 visitChildrenDiscardReturn(node);
@@ -308,7 +320,8 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
 
             @Override
             public Parser.ExpressionNode visit(Parser.PhiNode phi) {
-                throw new RuntimeException("Shouldn't occur");
+                //throw new RuntimeException("Shouldn't occur");
+                return phi;
             }
 
             @Override
@@ -338,6 +351,91 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
 
             private boolean isNodeToReplace(Parser.ExpressionNode node){
                 return node instanceof Parser.VariableAccessNode && ((Parser.VariableAccessNode) node).definition == search;
+            }
+        }));
+    }
+
+    public static Parser.ExpressionNode replace(Parser.ExpressionNode expression){
+        return replaceExpressionWithExpression(expression, (node) -> node instanceof Parser.BinaryOperatorNode || node instanceof Parser.UnaryOperatorNode,  (node) -> {
+            if (node instanceof Parser.BinaryOperatorNode) {
+                Parser.BinaryOperatorNode binOp = (Parser.BinaryOperatorNode) node;
+                switch (binOp.operator) {
+                    case GREATER:
+                        return new Parser.BinaryOperatorNode(binOp.right, binOp.left, Parser.LexerTerminal.LOWER);
+                    case LOWER_EQUALS:
+                    case GREATER_EQUALS:
+                        Parser.ExpressionNode left = binOp.left;
+                        Parser.ExpressionNode right = binOp.right;
+                        Parser.LexerTerminal op = Parser.LexerTerminal.LOWER;
+                        if (binOp.operator == Parser.LexerTerminal.GREATER_EQUALS) {
+                            Parser.ExpressionNode tmp = left;
+                            left = right;
+                            right = tmp;
+                            op = Parser.LexerTerminal.GREATER;
+                        }
+                        return new Parser.BinaryOperatorNode(new Parser.BinaryOperatorNode(left, right, op), new Parser.BinaryOperatorNode(left, right, op), Parser.LexerTerminal.OR);
+                    case MINUS:
+                        return new Parser.BinaryOperatorNode(new Parser.BinaryOperatorNode(binOp.left, new Parser.UnaryOperatorNode(binOp.right, Parser.LexerTerminal.TILDE), Parser.LexerTerminal.PLUS), new Parser.IntegerLiteralNode(binOp.location, Lattices.ValueLattice.get().parse(1)), Parser.LexerTerminal.PLUS);
+                    default:
+                        return binOp;
+                }
+            } else if (node instanceof Parser.UnaryOperatorNode){
+                Parser.UnaryOperatorNode unOp = (Parser.UnaryOperatorNode)node;
+                switch (unOp.operator){
+                    case MINUS:
+                        return new Parser.BinaryOperatorNode(new Parser.IntegerLiteralNode(unOp.location, Lattices.ValueLattice.get().parse(1)), new Parser.UnaryOperatorNode(unOp.expression, Parser.LexerTerminal.INVERT), Parser.LexerTerminal.PLUS);
+                }
+                return unOp;
+            }
+            return node;
+        });
+    }
+
+    static Parser.ExpressionNode replaceExpressionWithExpression(Parser.ExpressionNode node, Predicate<Parser.ExpressionNode> matcher, Function<Parser.ExpressionNode, Parser.ExpressionNode> replacement){
+        return node.accept(new Parser.NodeVisitor<Parser.ExpressionNode>() {
+            @Override
+            public Parser.ExpressionNode visit(Parser.MJNode node) {
+                visitChildrenDiscardReturn(node);
+                return null;
+            }
+
+            @Override
+            public Parser.ExpressionNode visit(Parser.ExpressionNode expression) {
+                return replace(expression);
+            }
+
+            @Override
+            public Parser.ExpressionNode visit(Parser.UnaryOperatorNode unaryOperator) {
+                return replace(new Parser.UnaryOperatorNode(visitAndReplace(unaryOperator.expression), unaryOperator.operator));
+            }
+
+            @Override
+            public Parser.ExpressionNode visit(Parser.BinaryOperatorNode binaryOperator) {
+                return replace(new Parser.BinaryOperatorNode(visitAndReplace(binaryOperator.left), visitAndReplace(binaryOperator.right), binaryOperator.operator));
+            }
+
+            @Override
+            public Parser.ExpressionNode visit(Parser.PrimaryExpressionNode primaryExpression) {
+                return replace(primaryExpression);
+            }
+
+            private Parser.ExpressionNode replace(Parser.ExpressionNode node){
+                if (matcher.test(node)){
+                    return replacement.apply(node);
+                }
+                return node;
+            }
+
+            private Parser.ExpressionNode visitAndReplace(Parser.ExpressionNode node){
+                node = replace(node);
+                node = node.accept(this);
+                node = replace(node);
+                return node;
+            }
+
+            @Override
+            public Parser.ExpressionNode visit(Parser.MethodInvocationNode methodInvocation) {
+                return null;
             }
         });
     }

@@ -1,24 +1,15 @@
 package swp.lexer.automata;
 
-import swp.SWPException;
-import swp.grammar.Grammar;
-import swp.grammar.GrammarBuilder;
-import swp.lexer.Lexer;
-import swp.lexer.Token;
-import swp.parser.lr.*;
-import swp.util.Pair;
-import swp.util.SerializableFunction;
-import swp.util.Utils;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.io.*;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.stream.IntStream;
+
+import swp.SWPException;
+import swp.grammar.*;
+import swp.lexer.*;
+import swp.parser.lr.*;
+import swp.util.*;
 
 /**
  * Parser for a lexer description.

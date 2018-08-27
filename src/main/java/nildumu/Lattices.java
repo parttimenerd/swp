@@ -1,24 +1,13 @@
 package nildumu;
 
-import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
-import swp.util.Pair;
-
 import java.time.temporal.ValueRange;
 import java.util.*;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.function.*;
+import java.util.stream.*;
 
-import static nildumu.Lattices.B.ONE;
-import static nildumu.Lattices.B.U;
-import static nildumu.Lattices.B.X;
-import static nildumu.Lattices.B.ZERO;
+import swp.util.Pair;
+
+import static nildumu.Lattices.B.*;
 import static nildumu.Util.*;
 
 /**
@@ -915,6 +904,9 @@ public class Lattices {
                     while (i < str.length() && str.charAt(i) == ' ') {
                         i++;
                     }
+                }
+                if (bits.size() == 1){
+                    bits.add(new Bit(ZERO));
                 }
                 return new Pair<>(new Value(bits), i);
             } else {

@@ -1,9 +1,8 @@
 package swp.parser.lr;
 
-import swp.lexer.Token;
+import java.util.*;
 
-import java.util.ArrayList;
-import java.util.List;
+import swp.lexer.Token;
 
 /**
  * A basic AST

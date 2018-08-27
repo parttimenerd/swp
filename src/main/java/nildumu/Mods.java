@@ -1,9 +1,7 @@
 package nildumu;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
+import java.util.*;
+import java.util.stream.*;
 
 import static nildumu.Lattices.Bit;
 
