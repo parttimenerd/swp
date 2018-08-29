@@ -118,7 +118,7 @@ public abstract class MethodInvocationHandler {
                 for (int i = 0; i < arguments.size(); i++) {
                     c.setVariableValue(method.parameters.get(i).definition, arguments.get(i));
                 }
-                Processor.process(c, method);
+                Processor.process(c, method.body);
                 Value ret = c.getReturnValue();
                 c.variableStates.pop();
                 methodCallCounter.put(method, methodCallCounter.get(method) - 1);

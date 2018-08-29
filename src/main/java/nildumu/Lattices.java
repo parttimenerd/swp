@@ -770,6 +770,7 @@ public class Lattices {
         final long bitNo;
         private int valueIndex = 0;
         private Value value = null;
+        private int version = 0;
 
         public Bit(B val, DependencySet dataDeps, DependencySet controlDeps) {
             this.val = val;
@@ -793,10 +794,11 @@ public class Lattices {
                 }
                 return String.format("(%s, %s, %s)", bs.toString(val), ds.toString(dataDeps), ds.toString(controlDeps));
             }*/
+            String inputStr = isInputBit() ? "#" : "";
             if (valueIndex == 0){
                 return val.toString();
             }
-            return String.format("%s[%d]%s", value == null ? "" : (value.node() == null ? value.description() : value.node().getTextualId()), valueIndex, val);
+            return String.format("%s%s[%d]%sv%d", inputStr, value == null ? "" : (value.node() == null ? value.description() : value.node().getTextualId()), valueIndex, val, version);
         }
 
         @Override
@@ -833,7 +835,7 @@ public class Lattices {
             }
             String name = "";
             if (value != null && !value.description.isEmpty()){
-                name = String.format("%s[%d]|", value.node() == null ? value.description() : value.node().getTextualId(), valueIndex);
+                name = String.format("%s[%d]v%d|", value.node() == null ? value.description() : value.node().getTextualId(), valueIndex, version);
             }
             return String.format("(%s%s, %s, %s)", name, bs.toString(val), ds.toString(dataDeps), ds.toString(controlDeps));
         }
@@ -862,6 +864,24 @@ public class Lattices {
 
         public boolean isUnknown(){
             return val == B.U;
+        }
+
+        public boolean isInputBit(){
+            return isUnknown() && !hasDependencies();
+        }
+
+        public void version(int version){
+            if (this.version == 0){
+                this.version = version;
+            }
+        }
+
+        public int version(){
+            return version;
+        }
+
+        public static long getNumberOfCreatedBits(){
+            return NUMBER_OF_BITS;
         }
     }
 
@@ -975,7 +995,7 @@ public class Lattices {
         private Parser.MJNode node = null;
 
         public Value(List<Bit> bits) {
-            assert bits.size() > 1;
+            //assert bits.size() > 1;
             this.bits = bits;
             for (int i = 0; i < bits.size(); i++) {
                 Bit bit = bits.get(i);

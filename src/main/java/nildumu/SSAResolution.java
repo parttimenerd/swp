@@ -1,15 +1,16 @@
 package nildumu;
 
 import java.util.*;
-import java.util.function.*;
 import java.util.stream.Collectors;
 
 import swp.parser.lr.BaseAST;
 
+import static nildumu.Parser.*;
+
 /**
  * Does the conversion of a non SSA to a SSA AST, introduces new phi-nodes and variables
  */
-public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
+public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
 
     /**
      * Result of visiting a statement
@@ -20,14 +21,14 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
 
         final boolean removeCurrentStatement;
 
-        final List<Parser.StatementNode> statementsToAdd;
+        final List<StatementNode> statementsToAdd;
 
-        VisRet(boolean removeCurrentStatement, List<Parser.StatementNode> statementsToAdd) {
+        VisRet(boolean removeCurrentStatement, List<StatementNode> statementsToAdd) {
             this.removeCurrentStatement = removeCurrentStatement;
             this.statementsToAdd = statementsToAdd;
         }
 
-        VisRet(boolean removeCurrentStatement, Parser.StatementNode... statementsToAdd) {
+        VisRet(boolean removeCurrentStatement, StatementNode... statementsToAdd) {
             this(removeCurrentStatement, Arrays.asList(statementsToAdd));
         }
 
@@ -36,7 +37,7 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
         }
     }
 
-    private final Parser.ProgramNode program;
+    private final ProgramNode program;
     /**
      * Newly introduced variables for an old one
      */
@@ -54,16 +55,24 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
 
     private Map<Variable, Integer> versionCount;
 
-    public SSAResolution(Parser.ProgramNode program) {
-        this.program = program;
-    }
+    private MethodNode currentMethod;
 
-    public void resolve(){
+    public SSAResolution(ProgramNode program) {
         reverseMapping = new HashMap<>();
         versionCount = new HashMap<>();
         directPredecessor = new HashMap<>();
         newVariables = new Stack<>();
-        program.accept(this);
+        this.program = program;
+    }
+
+    public void resolve(){
+        resolve(program);
+    }
+
+    public void resolve(MJNode node){
+        node.accept(this);
+        assignDefiningExpressions(node);
+        basicChecks(node);
     }
 
     void pushNewVariablesScope(){
@@ -75,13 +84,13 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
     }
 
     @Override
-    public VisRet visit(Parser.MJNode node) {
+    public VisRet visit(MJNode node) {
         visitChildrenDiscardReturn(node);
         return VisRet.DEFAULT;
     }
 
     @Override
-    public VisRet visit(Parser.ProgramNode program) {
+    public VisRet visit(ProgramNode program) {
         pushNewVariablesScope();
         visitChildrenDiscardReturn(program);
         popNewVariablesScope();
@@ -89,23 +98,23 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
     }
 
     @Override
-    public VisRet visit(Parser.VariableDeclarationNode declaration) {
-        return visit((Parser.MJNode)declaration);
+    public VisRet visit(VariableDeclarationNode declaration) {
+        return visit((MJNode)declaration);
     }
 
     @Override
-    public VisRet visit(Parser.VariableAssignmentNode assignment) {
+    public VisRet visit(VariableAssignmentNode assignment) {
         visitChildrenDiscardReturn(assignment.expression);
         Variable newVariable = create(assignment.definition);
         assignment.definition = newVariable;
         return new VisRet(true,
-                new Parser.VariableDeclarationNode(assignment.location, newVariable, assignment.expression));
+                new VariableDeclarationNode(assignment.location, newVariable, assignment.expression));
     }
 
     @Override
-    public VisRet visit(Parser.BlockNode block) {
-        List<Parser.StatementNode> blockPartNodes = new ArrayList<>();
-        for (Parser.StatementNode child : block.statementNodes){
+    public VisRet visit(BlockNode block) {
+        List<StatementNode> blockPartNodes = new ArrayList<>();
+        for (StatementNode child : block.statementNodes){
             VisRet ret = child.accept(this);
             if (!ret.removeCurrentStatement) {
                 blockPartNodes.add(child);
@@ -118,19 +127,22 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
     }
 
     @Override
-    public VisRet visit(Parser.MethodNode method) {
-
-        method.parameters.accept(this);
-        return method.body.accept(this);
-    }
-
-    @Override
-    public VisRet visit(Parser.ParameterNode parameter) {
+    public VisRet visit(MethodNode method) {
+        SSAResolution resolution = new SSAResolution(program);
+        resolution.currentMethod = method;
+        resolution.pushNewVariablesScope();
+        resolution.resolve(method.parameters);
+        resolution.resolve(method.body);
         return VisRet.DEFAULT;
     }
 
     @Override
-    public VisRet visit(Parser.IfStatementNode ifStatement) {
+    public VisRet visit(ParameterNode parameter) {
+        return VisRet.DEFAULT;
+    }
+
+    @Override
+    public VisRet visit(IfStatementNode ifStatement) {
         visitChildrenDiscardReturn(ifStatement.conditionalExpression);
 
         pushNewVariablesScope();
@@ -148,14 +160,14 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
         redefinedVariables.addAll(ifRedefines.keySet());
         redefinedVariables.addAll(elseRedefines.keySet());
 
-        List<Parser.StatementNode> phiStatements = new ArrayList<>();
+        List<StatementNode> phiStatements = new ArrayList<>();
         for (Variable var : redefinedVariables){
             List<Variable> varsToJoin = new ArrayList<>();
             varsToJoin.add(ifRedefines.getOrDefault(var, var));
             varsToJoin.add(elseRedefines.getOrDefault(var, var));
             Variable created = create(var);
-            Parser.VariableDeclarationNode localVarDecl =
-                    new Parser.VariableDeclarationNode(ifStatement.location, created.name, new Parser.PhiNode(ifStatement.location, Collections.singletonList(ifStatement.conditionalExpression), varsToJoin));
+            VariableDeclarationNode localVarDecl =
+                    new VariableDeclarationNode(ifStatement.location, created.name, new PhiNode(ifStatement.location, Collections.singletonList(ifStatement.conditionalExpression), varsToJoin));
             localVarDecl.definition = created;
             phiStatements.add(localVarDecl);
         }
@@ -163,7 +175,7 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
     }
 
     @Override
-    public VisRet visit(Parser.WhileStatementNode whileStatement) {
+    public VisRet visit(WhileStatementNode whileStatement) {
         visitChildrenCollectReturn(whileStatement.conditionalExpression);
         pushNewVariablesScope();
         whileStatement.body.accept(this);
@@ -172,30 +184,30 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
         for (Variable variable : variablesAssigned){
             Variable whileEndVariable = resolve(variable);
             Variable newVariable = create(variable);
-            whileStatement.conditionalExpression = replaceVariableWithExpression(variable, new Parser.PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)), whileStatement.conditionalExpression);
-            Parser.VariableDeclarationNode decl = new Parser.VariableDeclarationNode(whileStatement.location, newVariable,
-                    new Parser.PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)));
+            whileStatement.conditionalExpression = replaceVariableWithExpression(variable, new PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)), whileStatement.conditionalExpression);
+            VariableDeclarationNode decl = new VariableDeclarationNode(whileStatement.location, newVariable,
+                    new PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)));
             replaceVariable(variable, newVariable, whileStatement.body);
             whileStatement.body.statementNodes.add(0, decl);
-            whileStatement.conditionalExpression = replaceVariableWithExpression(variable, new Parser.PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)), whileStatement.conditionalExpression);
+            whileStatement.conditionalExpression = replaceVariableWithExpression(variable, new PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)), whileStatement.conditionalExpression);
             variableAndWhileEnd.put(variable, whileEndVariable);
         }
         popNewVariablesScope();
         return new VisRet(false,
                 variableAndWhileEnd.entrySet().stream().map(e ->
-                new Parser.VariableDeclarationNode(whileStatement.location, create(e.getKey()),
-                        new Parser.PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(e.getKey(), e.getValue()))))
+                new VariableDeclarationNode(whileStatement.location, create(e.getKey()),
+                        new PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(e.getKey(), e.getValue()))))
                 .collect(Collectors.toList()));
     }
 
     @Override
-    public VisRet visit(Parser.VariableAccessNode variableAccess) {
+    public VisRet visit(VariableAccessNode variableAccess) {
         variableAccess.definition = resolve(variableAccess.definition);
         return VisRet.DEFAULT;
     }
 
     @Override
-    public VisRet visit(Parser.MethodInvocationNode methodInvocation) {
+    public VisRet visit(MethodInvocationNode methodInvocation) {
         methodInvocation.definition = program.getMethod(methodInvocation.method);
         visitChildrenDiscardReturn(methodInvocation);
         return VisRet.DEFAULT;
@@ -238,18 +250,18 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
     /**
      * Visit all child nodes and collect the return (flatten the resulting list
      */
-    private VisRet visitChildrenCollectReturn(Parser.MJNode node){
-        if (!(node instanceof Parser.StatementNode)){
+    private VisRet visitChildrenCollectReturn(MJNode node){
+        if (!(node instanceof StatementNode)){
             visitChildrenDiscardReturn(node);
             return VisRet.DEFAULT;
         }
-        List<Parser.StatementNode> retStatements = new ArrayList<>();
+        List<StatementNode> retStatements = new ArrayList<>();
         for (BaseAST childAst : node.children()){
-            Parser.MJNode child = (Parser.MJNode)childAst;
-            if (child instanceof Parser.StatementNode){
+            MJNode child = (MJNode)childAst;
+            if (child instanceof StatementNode){
                 VisRet ret = child.accept(this);
                 if (!ret.removeCurrentStatement){
-                    retStatements.add((Parser.StatementNode)child);
+                    retStatements.add((StatementNode)child);
                 }
                 retStatements.addAll(ret.statementsToAdd);
             } else {
@@ -264,18 +276,18 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
      *
      * @return assigned nodes that are not defined in the node
      */
-    Set<Variable> getAssignedOutsideVariables(Parser.MJNode node){
+    Set<Variable> getAssignedOutsideVariables(MJNode node){
         Set<Variable> assignedVariables = new HashSet<>();
         Set<Variable> definedVariables = new HashSet<>();
-        node.accept(new Parser.NodeVisitor<Object>() {
+        node.accept(new NodeVisitor<Object>() {
             @Override
-            public Object visit(Parser.MJNode node) {
+            public Object visit(MJNode node) {
                 visitChildrenDiscardReturn(node);
                 return null;
             }
 
             @Override
-            public Object visit(Parser.VariableDeclarationNode variableDeclaration) {
+            public Object visit(VariableDeclarationNode variableDeclaration) {
                 if (directPredecessor.containsKey(variableDeclaration.definition)) {
                     assignedVariables.add(directPredecessor.get(variableDeclaration.definition));
                 }
@@ -287,16 +299,16 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
         return assignedVariables;
     }
 
-    static void replaceVariable(Variable search, Variable replacement, Parser.MJNode node){
-        node.accept(new Parser.NodeVisitor<Object>() {
+    static void replaceVariable(Variable search, Variable replacement, MJNode node){
+        node.accept(new NodeVisitor<Object>() {
             @Override
-            public Object visit(Parser.MJNode node) {
+            public Object visit(MJNode node) {
                 visitChildrenDiscardReturn(node);
                 return null;
             }
 
             @Override
-            public Object visit(Parser.VariableAccessNode variableAccess) {
+            public Object visit(VariableAccessNode variableAccess) {
                 if (variableAccess.definition == search){
                     variableAccess.definition = replacement;
                 }
@@ -305,136 +317,181 @@ public class SSAResolution implements Parser.NodeVisitor<SSAResolution.VisRet> {
         });
     }
 
-    static Parser.ExpressionNode replaceVariableWithExpression(Variable search, Parser.ExpressionNode replacement, Parser.ExpressionNode node){
-        return replace(node.accept(new Parser.NodeVisitor<Parser.ExpressionNode>() {
+    static ExpressionNode replaceVariableWithExpression(Variable search, ExpressionNode replacement, ExpressionNode node){
+        return node.accept(new NodeVisitor<ExpressionNode>() {
             @Override
-            public Parser.ExpressionNode visit(Parser.MJNode node) {
+            public ExpressionNode visit(MJNode node) {
                 visitChildrenDiscardReturn(node);
                 return null;
             }
 
             @Override
-            public Parser.ExpressionNode visit(Parser.ExpressionNode expression) {
+            public ExpressionNode visit(ExpressionNode expression) {
                 return expression;
             }
 
             @Override
-            public Parser.ExpressionNode visit(Parser.PhiNode phi) {
+            public ExpressionNode visit(PhiNode phi) {
                 //throw new RuntimeException("Shouldn't occur");
                 return phi;
             }
 
             @Override
-            public Parser.ExpressionNode visit(Parser.UnaryOperatorNode unaryOperator) {
-                return new Parser.UnaryOperatorNode(visitAndReplaceVariable(unaryOperator.expression), unaryOperator.operator);
+            public ExpressionNode visit(UnaryOperatorNode unaryOperator) {
+                return new UnaryOperatorNode(visitAndReplaceVariable(unaryOperator.expression), unaryOperator.operator);
             }
 
             @Override
-            public Parser.ExpressionNode visit(Parser.BinaryOperatorNode binaryOperator) {
-                return new Parser.BinaryOperatorNode(visitAndReplaceVariable(binaryOperator.left), visitAndReplaceVariable(binaryOperator.right), binaryOperator.operator);
+            public ExpressionNode visit(BinaryOperatorNode binaryOperator) {
+                return new BinaryOperatorNode(visitAndReplaceVariable(binaryOperator.left), visitAndReplaceVariable(binaryOperator.right), binaryOperator.operator);
             }
 
             @Override
-            public Parser.ExpressionNode visit(Parser.PrimaryExpressionNode primaryExpression) {
+            public ExpressionNode visit(PrimaryExpressionNode primaryExpression) {
                 if (isNodeToReplace(primaryExpression)){
                     return replacement;
                 }
                 return primaryExpression;
             }
 
-            private Parser.ExpressionNode visitAndReplaceVariable(Parser.ExpressionNode node){
+            private ExpressionNode visitAndReplaceVariable(ExpressionNode node){
                 if (isNodeToReplace(node)){
                     return replacement;
                 }
                 return node.accept(this);
             }
 
-            private boolean isNodeToReplace(Parser.ExpressionNode node){
-                return node instanceof Parser.VariableAccessNode && ((Parser.VariableAccessNode) node).definition == search;
+            private boolean isNodeToReplace(ExpressionNode node){
+                return node instanceof VariableAccessNode && ((VariableAccessNode) node).definition == search;
             }
-        }));
-    }
-
-    public static Parser.ExpressionNode replace(Parser.ExpressionNode expression){
-        return replaceExpressionWithExpression(expression, (node) -> node instanceof Parser.BinaryOperatorNode || node instanceof Parser.UnaryOperatorNode,  (node) -> {
-            if (node instanceof Parser.BinaryOperatorNode) {
-                Parser.BinaryOperatorNode binOp = (Parser.BinaryOperatorNode) node;
-                switch (binOp.operator) {
-                    case GREATER:
-                        return new Parser.BinaryOperatorNode(binOp.right, binOp.left, Parser.LexerTerminal.LOWER);
-                    case LOWER_EQUALS:
-                    case GREATER_EQUALS:
-                        Parser.ExpressionNode left = binOp.left;
-                        Parser.ExpressionNode right = binOp.right;
-                        Parser.LexerTerminal op = Parser.LexerTerminal.LOWER;
-                        if (binOp.operator == Parser.LexerTerminal.GREATER_EQUALS) {
-                            Parser.ExpressionNode tmp = left;
-                            left = right;
-                            right = tmp;
-                            op = Parser.LexerTerminal.GREATER;
-                        }
-                        return new Parser.BinaryOperatorNode(new Parser.BinaryOperatorNode(left, right, op), new Parser.BinaryOperatorNode(left, right, op), Parser.LexerTerminal.OR);
-                    case MINUS:
-                        return new Parser.BinaryOperatorNode(new Parser.BinaryOperatorNode(binOp.left, new Parser.UnaryOperatorNode(binOp.right, Parser.LexerTerminal.TILDE), Parser.LexerTerminal.PLUS), new Parser.IntegerLiteralNode(binOp.location, Lattices.ValueLattice.get().parse(1)), Parser.LexerTerminal.PLUS);
-                    default:
-                        return binOp;
-                }
-            } else if (node instanceof Parser.UnaryOperatorNode){
-                Parser.UnaryOperatorNode unOp = (Parser.UnaryOperatorNode)node;
-                switch (unOp.operator){
-                    case MINUS:
-                        return new Parser.BinaryOperatorNode(new Parser.IntegerLiteralNode(unOp.location, Lattices.ValueLattice.get().parse(1)), new Parser.UnaryOperatorNode(unOp.expression, Parser.LexerTerminal.INVERT), Parser.LexerTerminal.PLUS);
-                }
-                return unOp;
-            }
-            return node;
         });
     }
+    
+    void assignDefiningExpressions(MJNode node){
+        Map<Variable, ExpressionNode> definingExprs = new HashMap<>();
+        // collect the defining expressions
+        node.accept(new NodeVisitor<Object>(){
 
-    static Parser.ExpressionNode replaceExpressionWithExpression(Parser.ExpressionNode node, Predicate<Parser.ExpressionNode> matcher, Function<Parser.ExpressionNode, Parser.ExpressionNode> replacement){
-        return node.accept(new Parser.NodeVisitor<Parser.ExpressionNode>() {
             @Override
-            public Parser.ExpressionNode visit(Parser.MJNode node) {
+            public Object visit(MJNode node) {
                 visitChildrenDiscardReturn(node);
                 return null;
             }
 
             @Override
-            public Parser.ExpressionNode visit(Parser.ExpressionNode expression) {
-                return replace(expression);
+            public Object visit(ExpressionNode expression) {
+                return null;
             }
 
             @Override
-            public Parser.ExpressionNode visit(Parser.UnaryOperatorNode unaryOperator) {
-                return replace(new Parser.UnaryOperatorNode(visitAndReplace(unaryOperator.expression), unaryOperator.operator));
+            public Object visit(VariableAssignmentNode assignment) {
+                definingExprs.put(assignment.definition, assignment.expression);
+                return null;
             }
 
             @Override
-            public Parser.ExpressionNode visit(Parser.BinaryOperatorNode binaryOperator) {
-                return replace(new Parser.BinaryOperatorNode(visitAndReplace(binaryOperator.left), visitAndReplace(binaryOperator.right), binaryOperator.operator));
+            public Object visit(MethodNode method) {
+                return null;
+            }
+        });
+        if (currentMethod != null){
+            currentMethod.parameters.parameterNodes.forEach(p -> {
+                ParameterAccessNode access = new ParameterAccessNode(p.location, p.name);
+                access.definition = p.definition;
+                definingExprs.put(p.definition, access);
+            });
+        }
+        Set<VariableAccessNode> accessesToAccesses = new HashSet<>();
+        // set defining expressions
+        node.accept(new NodeVisitor<Object>() {
+            @Override
+            public Object visit(MJNode node) {
+                visitChildrenDiscardReturn(node);
+                return null;
             }
 
             @Override
-            public Parser.ExpressionNode visit(Parser.PrimaryExpressionNode primaryExpression) {
-                return replace(primaryExpression);
-            }
-
-            private Parser.ExpressionNode replace(Parser.ExpressionNode node){
-                if (matcher.test(node)){
-                    return replacement.apply(node);
+            public Object visit(VariableAccessNode variableAccess) {
+                if (variableAccess.definingExpression != null){
+                    return null;
                 }
-                return node;
-            }
-
-            private Parser.ExpressionNode visitAndReplace(Parser.ExpressionNode node){
-                node = replace(node);
-                node = node.accept(this);
-                node = replace(node);
-                return node;
+                variableAccess.definingExpression = definingExprs.get(variableAccess.definition);
+                if (variableAccess.definingExpression instanceof VariableAccessNode && !(variableAccess.definingExpression instanceof ParameterAccessNode)){
+                    accessesToAccesses.add(variableAccess);
+                }
+                return null;
             }
 
             @Override
-            public Parser.ExpressionNode visit(Parser.MethodInvocationNode methodInvocation) {
+            public Object visit(ParameterAccessNode variableAccess) {
+                return null;
+            }
+
+            @Override
+            public Object visit(MethodNode method) {
+                return null;
+            }
+        });
+        while (accessesToAccesses.size() > 0){
+            new HashSet<>(accessesToAccesses).forEach(access -> {
+                ExpressionNode newDefining = definingExprs.get(((VariableAccessNode)access.definingExpression).definition);
+                if (!(newDefining instanceof VariableAccessNode) || newDefining instanceof ParameterAccessNode){
+                    accessesToAccesses.remove(access);
+                }
+            });
+        }
+    }
+
+    static void basicChecks(MJNode node){
+        node.accept(new NodeVisitor<Object>() {
+            @Override
+            public Object visit(MJNode node) {
+                visitChildrenDiscardReturn(node);
+                return null;
+            }
+
+            @Override
+            public Object visit(VariableAccessNode variableAccess) {
+                if (variableAccess.definition == null){
+                    throw new NildumuError(String.format("%s has no associated definition", variableAccess.toString()));
+                }
+                if (variableAccess.definingExpression == null){
+                    throw new NildumuError(String.format("%s has no defining expression", variableAccess.toString()));
+                }
+                return null;
+            }
+
+            @Override
+            public Object visit(ParameterAccessNode variableAccess) {
+                if (variableAccess.definition == null){
+                    throw new NildumuError(String.format("%s has no associated definition", variableAccess.toString()));
+                }
+                return null;
+            }
+
+
+            @Override
+            public Object visit(ParameterNode parameter) {
+                return null;
+            }
+
+            @Override
+            public Object visit(VariableDeclarationNode variableDeclaration) {
+                visitChildrenDiscardReturn(variableDeclaration);
+                if (variableDeclaration.definition == null){
+                    throw new NildumuError(String.format("%s has no associated definition", variableDeclaration.toString()));
+                }
+                return null;
+            }
+
+            @Override
+            public Object visit(PhiNode phi) {
+                phi.joinedVariables.forEach(this::visit);
+                return null;
+            }
+
+            @Override
+            public Object visit(MethodNode method) {
                 return null;
             }
         });

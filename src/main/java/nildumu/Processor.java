@@ -20,7 +20,7 @@ public class Processor {
     }
 
     public static Context process(String program, Context.Mode mode, MethodInvocationHandler handler){
-        ProgramNode node = parse(program);
+        ProgramNode node = Parser.process(program);
         return process(node.context.mode(mode).methodInvocationHandler(handler), node);
     }
 
@@ -68,7 +68,14 @@ public class Processor {
 
             @Override
             public Boolean visit(VariableAssignmentNode assignment) {
-                context.evaluate(assignment);
+                context.setVariableValue(assignment.definition, context.nodeValue(assignment.expression));
+                return false;
+            }
+
+            @Override
+            public Boolean visit(OutputVariableDeclarationNode outputDecl) {
+                visit((VariableAssignmentNode)outputDecl);
+                context.addOutputValue(context.sl.parse(outputDecl.secLevel), context.getVariableValue(outputDecl.definition));
                 return false;
             }
 
@@ -155,6 +162,11 @@ public class Processor {
                 if (returnStatement.hasReturnExpression()){
                     context.setReturnValue(context.nodeValue(returnStatement.expression));
                 }
+                return false;
+            }
+
+            @Override
+            public Boolean visit(VariableAccessNode variableAccess) {
                 return false;
             }
         }, context::evaluate, node, statementNodesToOmitOneTime);

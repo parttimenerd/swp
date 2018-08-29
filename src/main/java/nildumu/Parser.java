@@ -6,7 +6,8 @@ import java.io.Serializable;
 import java.util.*;
 import java.util.stream.*;
 
-import swp.SWPException;
+import jdk.nashorn.internal.ir.Block;
+import swp.*;
 import swp.lexer.*;
 import swp.parser.lr.*;
 import swp.util.Utils;
@@ -48,6 +49,7 @@ public class Parser implements Serializable {
         FALSE("false"),
         VOID("void"),
         USE_SEC("use_sec"),
+        BIT_WIDTH("bit_width"),
         TILDE("~"),
 
         LOWER_EQUALS("<="),
@@ -81,7 +83,10 @@ public class Parser implements Serializable {
         RCURLY("\\}"),
         COLON(":"),
         COMMA("[,]"),
-        DOT("\\.");
+        DOT("\\."),
+        INDEX("\\[[1-9][0-9]*\\]"),
+        SELECT_OP("\\[s[1-9][0-9]*\\]"),
+        PLACE_OP("\\[p[1-9][0-9]*\\]");
 
         private String description;
         private String representation;
@@ -116,12 +121,38 @@ public class Parser implements Serializable {
      * Change the id, when changing the parser oder replace the id by {@code null} to build the parser and lexer
      * every time (takes long)
      */
-    public static Generator generator = Generator.getCachedIfPossible("stuff/blae54r6r55344474i446u7s5f2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
+    public static Generator generator = Generator.getCachedIfPossible("stuff/blaf5ef6534r6r55344474i446u7s5f2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
             (builder) -> {
-                builder.addRule("program", "use_sec? lines", asts -> {
+                builder.addRule("program", "use_sec? bit_width? lines", asts -> {
                             MJNode.resetIdCounter();
                             SecurityLattice<?> secLattice = asts.get(0).children().isEmpty() ? BasicSecLattice.get() : ((ListAST<WrapperNode<SecurityLattice<?>>>)asts.get(0)).get(0).wrapped;
-                            ProgramNode node = new ProgramNode(new Context(secLattice));
+                            int declaredBitWidth = asts.get(1).children().isEmpty() ? -1 : ((ListAST<WrapperNode<Integer>>)asts.get(1)).get(0).wrapped;
+                            /**
+                             * Calc bit width
+                             */
+                            int lowerBitWidthBound = asts.get(2).<WrapperNode<List<MJNode>>>as().wrapped.stream().mapToInt(n -> n.accept(new NodeVisitor<Integer>() {
+
+                                @Override
+                                public Integer visit(MJNode node) {
+                                    return visitChildren(node).stream().max(Integer::compare).orElse(0);
+                                }
+
+                                @Override
+                                public Integer visit(IntegerLiteralNode literal) {
+                                    int bitWidth = literal.value.size();
+                                    if (bitWidth > declaredBitWidth && declaredBitWidth != -1){
+                                        //Token literalToken = literal.getMatchedTokens().get(0);
+                                        System.err.println(String.format("Declared bit width of %d is lower than the bit width of literal %s", declaredBitWidth, literal));
+                                    }
+                                    return bitWidth;
+                                }
+                            })).max().orElse(0);
+                            int bitWidth = declaredBitWidth;
+                            if (declaredBitWidth == -1){
+                                bitWidth = lowerBitWidthBound;
+                                System.out.println(String.format("Using bit width of %d", bitWidth));
+                            }
+                            ProgramNode node = new ProgramNode(new Context(secLattice, bitWidth));
                             NodeVisitor visitor = new NodeVisitor<Object>(){
 
                                 @Override
@@ -149,11 +180,14 @@ public class Parser implements Serializable {
                                     return null;
                                 }
                             };
-                            asts.get(1).<WrapperNode<List<MJNode>>>as().wrapped.forEach(n -> n.accept(visitor));
+                            asts.get(2).<WrapperNode<List<MJNode>>>as().wrapped.forEach(n -> n.accept(visitor));
                             return node;
                         })
                         .addRule("use_sec", "USE_SEC IDENT SEMICOLON", asts -> {
                             return new WrapperNode<>(asts.getStartLocation(), SecurityLattice.forName(asts.get(1).getMatchedString()));
+                        })
+                        .addRule("bit_width", "BIT_WIDTH INTEGER_LITERAL SEMICOLON", asts -> {
+                            return new WrapperNode<>(asts.getStartLocation(), Integer.parseInt(asts.get(1).getMatchedString()));
                         })
                         .addRule("lines", "line_w_semi lines", asts -> {
                             WrapperNode<List<MJNode>> left = (WrapperNode<List<MJNode>>) asts.get(1);
@@ -296,8 +330,24 @@ public class Parser implements Serializable {
                             operators.defaultBinaryAction((asts, op) -> {
                                         return new BinaryOperatorNode((ExpressionNode)asts.get(0), (ExpressionNode)asts.get(2), LexerTerminal.valueOf(op));
                                     })
-                                    .defaultUnaryAction((asts, op) -> {
-                                        return new UnaryOperatorNode((ExpressionNode)asts.get(1), LexerTerminal.valueOf(op));
+                                    .defaultUnaryAction((asts, opStr) -> {
+                                        LexerTerminal op = LexerTerminal.valueOf(opStr);
+                                        ExpressionNode child = null;
+                                        Token opToken = null;
+                                        boolean exprIsLeft = false;
+                                        if (asts.get(0) instanceof ExpressionNode){
+                                            child = (ExpressionNode)asts.get(0);
+                                            opToken = asts.get(1).getMatchedTokens().get(0);
+                                            exprIsLeft = true;
+                                        } else {
+                                            child = (ExpressionNode)asts.get(1);
+                                            opToken = asts.get(0).getMatchedTokens().get(0);
+                                        }
+                                        if (op == INDEX){
+                                            String opTokenStr = opToken.value;
+                                            return new SingleUnaryOperatorNode(child, exprIsLeft ? SELECT_OP : PLACE_OP, Integer.parseInt(opTokenStr.substring(1, opTokenStr.length() - 1)));
+                                        }
+                                        return new UnaryOperatorNode(child, op);
                                     })
                                     .closeLayer()
                                     .binaryLayer(OR)
@@ -309,7 +359,8 @@ public class Parser implements Serializable {
                                     .binaryLayer(LOWER, LOWER_EQUALS, GREATER, GREATER_EQUALS)
                                     .binaryLayer(PLUS, MINUS)
                                     .binaryLayer(MULTIPLY, DIVIDE, MODULO)
-                                    .unaryLayerLeft(INVERT, MINUS);
+                                    .unaryLayerLeft(INVERT, MINUS, TILDE, INDEX)
+                                    .unaryLayerRight(INDEX);
                         })
                         .addRule("postfix_expression", "primary_expression")
                         .addEitherRule("postfix_expression", "method_invocation")
@@ -384,17 +435,9 @@ public class Parser implements Serializable {
         ProgramNode program = (ProgramNode) generator.parse(input);
         new NameResolution(program).resolve();
         new SSAResolution(program).resolve();
-        return program;
-    }
-
-    /**
-     * Parse and do a SSA resolution.
-     */
-    public static ProgramNode parse(String input){
-        ProgramNode program = (ProgramNode) generator.parse(input);
-        new NameResolution(program).resolve();
-        new SSAResolution(program).resolve();
-        return program;
+        ProgramNode transformedProgram = (ProgramNode)new MetaOperatorTransformator(program.context.maxBitWidth).process(program);
+        SSAResolution.basicChecks(transformedProgram);
+        return transformedProgram;
     }
 
     /**
@@ -492,12 +535,20 @@ public class Parser implements Serializable {
             return visit((PrimaryExpressionNode)variableAccess);
         }
 
+        default R visit(ParameterAccessNode variableAccess){
+            return visit((VariableAccessNode)variableAccess);
+        }
+
         default R visit(BinaryOperatorNode binaryOperator){
             return visit((ExpressionNode)binaryOperator);
         }
 
         default R visit(UnaryOperatorNode unaryOperator){
             return visit((ExpressionNode)unaryOperator);
+        }
+
+        default R visit(SingleUnaryOperatorNode unaryOperator){
+            return visit((UnaryOperatorNode)unaryOperator);
         }
 
         default R visit(PrimaryExpressionNode primaryExpression){
@@ -600,9 +651,12 @@ public class Parser implements Serializable {
             return visit((ExpressionNode)phi);
         }
 
-
         default R visit(VariableAccessNode variableAccess){
             return visit((PrimaryExpressionNode)variableAccess);
+        }
+
+        default R visit(ParameterAccessNode variableAccess){
+            return visit((VariableAccessNode)variableAccess);
         }
 
         default R visit(IntegerLiteralNode literal){
@@ -619,6 +673,10 @@ public class Parser implements Serializable {
 
         default R visit(PrimaryExpressionNode primaryExpression){
             return visit((ExpressionNode)primaryExpression);
+        }
+
+        default R visit(SingleUnaryOperatorNode unaryOperator){
+            return visit((UnaryOperatorNode)unaryOperator);
         }
 
         /**
@@ -658,6 +716,10 @@ public class Parser implements Serializable {
             return visit((PrimaryExpressionNode)variableAccess, argument);
         }
 
+        default R visit(ParameterAccessNode variableAccess, A argument){
+            return visit((VariableAccessNode)variableAccess, argument);
+        }
+
         default R visit(IntegerLiteralNode literal, A argument){
             return visit((PrimaryExpressionNode)literal, argument);
         }
@@ -668,6 +730,10 @@ public class Parser implements Serializable {
 
         default R visit(UnaryOperatorNode unaryOperator, A argument){
             return visit((ExpressionNode)unaryOperator, argument);
+        }
+
+        default R visit(SingleUnaryOperatorNode unaryOperator, A argument){
+            return visit((UnaryOperatorNode)unaryOperator, argument);
         }
 
         default R visit(PrimaryExpressionNode primaryExpression, A argument){
@@ -810,6 +876,10 @@ public class Parser implements Serializable {
 
         public void addGlobalStatement(StatementNode statement){
             globalBlock.statementNodes.add(statement);
+        }
+
+        public void addGlobalStatements(List<StatementNode> statements){
+            globalBlock.statementNodes.addAll(statements);
         }
 
         @Override
@@ -1033,7 +1103,7 @@ public class Parser implements Serializable {
 
         @Override
         public Operator getOperator() {
-            return new Operator.VariableAccess(definition);
+            return null;
         }
 
         @Override
@@ -1230,10 +1300,7 @@ public class Parser implements Serializable {
 
         @Override
         public Operator getOperator() {
-            if (hasInitExpression()) {
-                return new Operator.VariableAssignment(definition);
-            }
-            return new Operator.LiteralOperator(vl.bot());
+            return null;
         }
 
         @Override
@@ -1277,7 +1344,7 @@ public class Parser implements Serializable {
 
         @Override
         public Operator getOperator(Context c) {
-            return new Operator.OutputVariableAssignment(definition, c.sl.parse(secLevel));
+            return null;
         }
 
         @Override
@@ -1366,11 +1433,6 @@ public class Parser implements Serializable {
                 return Arrays.asList(expression);
             }
             return Collections.emptyList();
-        }
-
-        @Override
-        public Operator getOperator() {
-            return new Operator.VariableAssignment(definition);
         }
 
         @Override
@@ -1823,10 +1885,6 @@ public class Parser implements Serializable {
                     return Operator.OR;
                 case XOR:
                     return Operator.XOR;
-                case PLUS:
-                    return Operator.ADD;
-                case MULTIPLY:
-                    return Operator.MULTIPLY;
                 case EQUALS:
                     return Operator.EQUALS;
                 case UNEQUALS:
@@ -1880,7 +1938,7 @@ public class Parser implements Serializable {
 
         @Override
         public String shortType() {
-            return operator.representation;
+            return operator.representation.replace("\\", "");
         }
     }
 
@@ -1892,7 +1950,14 @@ public class Parser implements Serializable {
         public final LexerTerminal operator;
         public final Operator op;
 
-        public UnaryOperatorNode(ExpressionNode expression, LexerTerminal operator) {
+        UnaryOperatorNode(ExpressionNode expression, LexerTerminal operator, Operator op) {
+            super(expression.location);
+            this.operator = operator;
+            this.expression = expression;
+            this.op = op;
+        }
+
+        UnaryOperatorNode(ExpressionNode expression, LexerTerminal operator) {
             super(expression.location);
             this.expression = expression;
             this.operator = operator;
@@ -1900,6 +1965,7 @@ public class Parser implements Serializable {
                 case INVERT:
                 case TILDE:
                     op = Operator.NOT;
+                    break;
                 default:
                     throw new UnsupportedOperationException(operator.toString());
             }
@@ -1907,7 +1973,7 @@ public class Parser implements Serializable {
 
         @Override
         public String toString() {
-            return operator.name() + expression;
+            return operator.description + expression;
         }
 
         @Override
@@ -1948,6 +2014,57 @@ public class Parser implements Serializable {
         @Override
         public String shortType() {
             return operator.representation;
+        }
+    }
+
+    public static class SingleUnaryOperatorNode extends UnaryOperatorNode {
+
+        public final int index;
+
+        public SingleUnaryOperatorNode(ExpressionNode expression, LexerTerminal operator, int index) {
+            super(expression, operator, operator == PLACE_OP ? new Operator.PlaceBit(index) : new Operator.SelectBit(index));
+            if (operator != PLACE_OP && operator != SELECT_OP){
+                throw new UnsupportedOperationException(operator.toString());
+            }
+            assert index > 0;
+            this.index = index;
+        }
+
+        @Override
+        public String toString() {
+            switch (operator){
+                case PLACE_OP:
+                    return String.format("[%d]%s", index, expression);
+                case SELECT_OP:
+                    return String.format("%s[%d]", expression, index);
+            }
+            return "";
+        }
+
+        @Override
+        public String shortType() {
+            switch (operator){
+                case PLACE_OP:
+                    return String.format("[%d]·", index);
+                case SELECT_OP:
+                    return String.format("·[%d]", index);
+            }
+            return "";
+        }
+
+        @Override
+        public <R> R accept(NodeVisitor<R> visitor) {
+            return visitor.visit(this);
+        }
+
+        @Override
+        public <R> R accept(ExpressionVisitor<R> visitor) {
+            return visitor.visit(this);
+        }
+
+        @Override
+        public <R,A> R accept(ExpressionVisitorWArgs<R, A> visitor, A argument){
+            return visitor.visit(this, argument);
         }
     }
 
@@ -2155,6 +2272,7 @@ public class Parser implements Serializable {
     public static class VariableAccessNode extends PrimaryExpressionNode {
         public final String ident;
         Variable definition;
+        ExpressionNode definingExpression;
 
         public VariableAccessNode(Location location, String ident) {
             super(location);
@@ -2173,6 +2291,9 @@ public class Parser implements Serializable {
 
         @Override
         public List<BaseAST> children() {
+            if (definingExpression != null){
+                return Utils.makeArrayList(definingExpression);
+            }
             return Utils.makeArrayList();
         }
 
@@ -2192,6 +2313,11 @@ public class Parser implements Serializable {
         }
 
         @Override
+        public Operator getOperator() {
+            throw new NildumuError(String.format("No operator defined for %s", this));
+        }
+
+        @Override
         public String getTextualId() {
             return shortType() + ":" + (definition != null ? definition.name : ident) + location.toString();
         }
@@ -2200,9 +2326,33 @@ public class Parser implements Serializable {
         public String shortType() {
             return "ac";
         }
+
+    }
+
+    public static class ParameterAccessNode extends VariableAccessNode {
+
+        public ParameterAccessNode(Location location, String ident) {
+            super(location, ident);
+        }
+
+        @Override
+        public <R> R accept(NodeVisitor<R> visitor) {
+            return visitor.visit(this);
+        }
+
+        @Override
+        public <R> R accept(ExpressionVisitor<R> visitor) {
+            return visitor.visit(this);
+        }
+
+        @Override
+        public <R,A> R accept(ExpressionVisitorWArgs<R, A> visitor, A argument){
+            return visitor.visit(this, argument);
+        }
+
         @Override
         public Operator getOperator() {
-            return new Operator.VariableAccess(definition);
+            return new Operator.ParameterAccess(this.definition);
         }
     }
 
@@ -2210,8 +2360,14 @@ public class Parser implements Serializable {
      * A phi node to join two variables from different control paths
      */
     public static class PhiNode extends ExpressionNode {
-        public final List<ExpressionNode> controlDeps;
+        public List<ExpressionNode> controlDeps;
         public final List<VariableAccessNode> joinedVariables;
+
+        public PhiNode(Location location, List<ExpressionNode> controlDeps, ArrayList<VariableAccessNode> joinedVariables) {
+            super(location);
+            this.controlDeps = controlDeps;
+            this.joinedVariables = joinedVariables;
+        }
 
         public PhiNode(Location location, List<ExpressionNode> controlDeps, List<Variable> joinedVariables) {
             super(location);
@@ -2225,7 +2381,9 @@ public class Parser implements Serializable {
 
         @Override
         public List<BaseAST> children() {
-            return (List<BaseAST>)(List<?>)joinedVariables;
+            List<BaseAST> children = new ArrayList<>(joinedVariables);
+            children.addAll(controlDeps);
+            return children;
         }
 
         @Override

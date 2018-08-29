@@ -1,8 +1,12 @@
 package nildumu;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
+import java.time.Duration;
+
+import static java.time.Duration.ofMillis;
 import static nildumu.Processor.process;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 public class LoopTests {
 
@@ -16,6 +20,16 @@ public class LoopTests {
                 "l output int o = h;").leakage(l -> l.hasLeakage("l", 1));
     }
 
+    /**
+     * <code>
+       h input int h = 0b0u;
+       int x = 0;
+       while (h == 0){
+            x = x + 1;
+       }
+       l output int o = x;
+     * </code>
+     */
     @Test
     public void testBasicLoop(){
         parse("h input int h = 0b0u;\n" +
@@ -56,10 +70,66 @@ public class LoopTests {
      */
     @Test
     public void testBasicLoop4(){
-        parse("h input int h = 0b0u;\n" +
+        assertTimeoutPreemptively(ofMillis(1000), () -> {
+            parse("h input int h = 0b0u;\n" +
                 "while (h == h){\n" +
                 "\th + 1;\n" +
                 "}\n");
+        });
+    }
+
+    /**
+     * This one didn't terminate
+     * <code>
+     *     h input int h = 0b0u;
+     *     while (h == h){
+     * 	        h + 1;
+     *     }
+     * </code>
+     */
+    @Test
+    public void testBasicLoop4_1(){
+        assertTimeoutPreemptively(ofMillis(10000), () -> {
+            parse("h input int h = 0b0u;\n" +
+                    "while (h == h){\n" +
+                    "\th = h + 1;\n" +
+                    "}\n");
+        });
+    }
+
+    /**
+     * <code>
+     *     bit_width 2;
+     *     h input int h = 0b0u;
+     *     l input int l = 0bu;
+     *     while (l){
+     *         h = [2](h[2] | h[1]);
+     *     }
+     *     l output int o = h;
+     * </code>
+     */
+    @Test
+    public void testBasicLoop4_condensed(){
+        assertTimeoutPreemptively(ofMillis(1000000), () ->
+                parse("bit_width 2;\n" +
+                "h input int h = 0b0u;\n" +
+                "l input int l = 0bu;\n" +
+                "while (l){\n" +
+                "  h = [2](h[2] | h[1]);\n" +
+                "}\n" +
+                "l output int o = h;"));
+    }
+
+    @Test
+    public void testBasicLoop4_condensed2(){
+        assertTimeoutPreemptively(ofMillis(1000000), () ->
+                parse("bit_width 2;\n" +
+                        "h input int h = 0b0u;\n" +
+                        "l input int l = 0bu;\n" +
+                        "while (l){\n" +
+                        "  h = [2](h[1]);\n" +
+                        "}\n" +
+                        "l output int o = h;"));
     }
 
     ContextMatcher parse(String program){

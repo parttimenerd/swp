@@ -4,7 +4,7 @@ import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.time.temporal.ValueRange;
 import java.util.*;
-import java.util.function.BiPredicate;
+import java.util.function.*;
 import java.util.stream.*;
 
 import swp.util.Pair;
@@ -21,7 +21,34 @@ public interface Operator {
         }
     }
 
-    public static class VariableAccess implements Operator {
+    public static class ParameterAccess implements Operator {
+
+        private final Variable variable;
+
+        public ParameterAccess(Variable variable) {
+            this.variable = variable;
+        }
+
+        @Override
+        public Value compute(Context c, List<Value> arguments) {
+            checkArguments(arguments);
+            return c.getVariableValue(variable);
+        }
+
+        @Override
+        public String toString(List<Value> arguments) {
+            checkArguments(arguments);
+            return variable.toString();
+        }
+
+        void checkArguments(List<Value> arguments){
+            if (arguments.size() != 0){
+                throw new WrongArgumentNumber(variable.toString(), arguments.size(), 0);
+            }
+        }
+    }
+
+    /*public static class VariableAccess implements Operator {
 
         private final Variable variable;
 
@@ -103,7 +130,7 @@ public interface Operator {
                 throw new WrongArgumentNumber(variable.toString() + "=", arguments.size(), 1);
             }
         }
-    }
+    }*/
 
     public static class LiteralOperator implements Operator {
         private final Value literal;
@@ -114,7 +141,7 @@ public interface Operator {
 
         @Override
         public Value compute(Context c, List<Value> arguments) {
-            return literal;
+            return c.replace(literal);
         }
 
         @Override
@@ -835,6 +862,10 @@ public interface Operator {
                 }
             };
         }
+
+        @Override
+        void checkArguments(List<Value> arguments) {
+        }
     };
 
     static final BitWiseOperator PHI_GENERIC = new BitWiseOperatorStructured("phi") {
@@ -874,43 +905,39 @@ public interface Operator {
         Context.ModsCreator computeModsCreator(Bit r, DependencySet dataDeps) {
             return PHI.computeModificator(null, null, r, dataDeps);
         }
-
-
     };
 
-    /**
-     * TODO: not the canonical implementation
-     */
-    static final BinaryOperator ADD = new BinaryOperator("+") {
+    public static class PlaceBit extends UnaryOperator {
+
+        final int index;
+
+        public PlaceBit(int index) {
+            super(String.format("[%d]·", index));
+            this.index = index;
+        }
+
         @Override
-        Value compute(Context c, Value first, Value second) {
-            List<Bit> res = new ArrayList<>();
-            Util.Box<Bit> carry = new Util.Box<>(Bit.ZERO);
-            return  vl.mapBitsToValue(first.extend(first.size() + 1), second.extend(second.size() + 1), (a, b) -> {
-                Pair<Bit, Bit> add = fullAdder(c, a, b, carry.val);
-                carry.val = add.second;
-                return add.first;
-            });
+        Value compute(Context c, Value argument) {
+            Bit newBit = new Bit(argument.get(1).val, argument.get(1).isUnknown() ? ds.create(argument.get(1)) : ds.bot(), ds.bot());
+            return IntStream.range(1, index + 2).mapToObj(i -> i == index ? newBit : new Bit(ZERO)).collect(Value.collector());
+        }
+    }
+
+    public static class SelectBit extends UnaryOperator {
+
+        final int index;
+
+        public SelectBit(int index) {
+            super(String.format("·[%d]", index));
+            this.index = index;
         }
 
-        Pair<Bit, Bit> fullAdder(Context context, Bit a, Bit b, Bit c) {
-            Pair<Bit, Bit> pair = halfAdder(context, a, b);
-            Pair<Bit, Bit> pair2 = halfAdder(context, pair.first, c);
-            Bit carry = OR.compute(context, pair.second, pair2.second);
-            return new Pair<>(pair2.first, carry);
-        }
-
-        Pair<Bit, Bit> halfAdder(Context context, Bit first, Bit second) {
-            return new Pair<>(XOR.compute(context, first, second), AND.compute(context, first, second));
-        }
-    };
-
-    static final BinaryOperator MULTIPLY = new BinaryOperator("*") {
         @Override
-        Value compute(Context c, Value first, Value second) {
-            throw new NotImplementedException();
+        Value compute(Context c, Value argument) {
+            Bit selectedBit = argument.extend(index).get(index);
+            return new Value(new Bit(selectedBit.val, selectedBit.isUnknown() ? ds.create(selectedBit) : ds.bot(), ds.bot()));
         }
-    };
+    }
 
     public static class MethodInvocation implements Operator {
 

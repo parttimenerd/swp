@@ -1,15 +1,20 @@
 package nildumu;
 
+import com.sun.istack.internal.logging.Logger;
+
+import sun.rmi.runtime.Log;
+
 import java.util.*;
 import java.util.function.*;
-import java.util.stream.Collectors;
+import java.util.logging.Level;
+import java.util.stream.*;
 
 import swp.util.Pair;
 
 import static nildumu.DefaultMap.ForbiddenAction.*;
 import static nildumu.Lattices.*;
 import static nildumu.LeakageCalculation.jungEdgeGraph;
-import static nildumu.Parser.MJNode;
+import static nildumu.Parser.*;
 
 /**
  * The context contains the global state and the global functions from the thesis.
@@ -65,7 +70,11 @@ public class Context {
         }
     }
 
+    public static final Logger LOG = Logger.getLogger("Analysis", Context.class);
+
     public final SecurityLattice<?> sl;
+
+    public final int maxBitWidth;
 
     public final IOValues input = new IOValues();
 
@@ -100,13 +109,17 @@ public class Context {
 
         @Override
         public Operator defaultValue(Map<MJNode, Operator> map, MJNode key) {
-            return key.getOperator(Context.this);
+            Operator op = key.getOperator(Context.this);
+            if (op == null){
+                throw new NildumuError(String.format("No operator for %s implemented", key));
+            }
+            return op;
         }
     }, FORBID_DELETIONS, FORBID_VALUE_UPDATES);
 
     private long nodeValueUpdateCount = 0;
 
-    private final DefaultMap<Parser.MJNode, Value> nodeValueMap = new DefaultMap<>(new LinkedHashMap<>(), new DefaultMap.Extension<MJNode, Value>() {
+    private final DefaultMap<MJNode, Value> nodeValueMap = new DefaultMap<>(new LinkedHashMap<>(), new DefaultMap.Extension<MJNode, Value>() {
 
         @Override
         public void handleValueUpdate(DefaultMap<MJNode, Value> map, MJNode key, Value value) {
@@ -168,8 +181,9 @@ public class Context {
 
     /*-------------------------- unspecific -------------------------------*/
 
-    public Context(SecurityLattice sl) {
+    public Context(SecurityLattice sl, int maxBitWidth) {
         this.sl = sl;
+        this.maxBitWidth = maxBitWidth;
         this.variableStates.push(new State());
     }
 
@@ -241,11 +255,24 @@ public class Context {
         throw new InvariantViolationError(String.join("\n", errorMessages));
     }
 
+    public void log(Supplier<String> msgProducer){
+        if (LOG.isLoggable(Level.FINE)){
+            System.out.println(msgProducer.get());
+        }
+    }
+
     public boolean isInputBit(Bit bit) {
         return input.contains(bit);
     }
 
     public Value nodeValue(MJNode node){
+        if (node instanceof ParameterAccessNode){
+            return getVariableValue(((ParameterAccessNode) node).definition);
+        } else if (node instanceof VariableAccessNode){
+            return nodeValue(((VariableAccessNode) node).definingExpression);
+        } else if (node instanceof WrapperNode){
+            return ((WrapperNode<Value>) node).wrapped;
+        }
         return nodeValueMap.get(node);
     }
 
@@ -253,32 +280,48 @@ public class Context {
         return nodeValueMap.put(node, value);
     }
 
-    Operator operatorForNode(Parser.MJNode node){
+    Operator operatorForNode(MJNode node){
         return operatorPerNode.get(node);
     }
 
-    public Value op(Parser.MJNode node, List<Value> arguments){
+    public Value op(MJNode node, List<Value> arguments){
         return operatorForNode(node).compute(this, node, arguments);
     }
 
+    @SuppressWarnings("unchecked")
     public List<MJNode> paramNode(MJNode node){
-        return (List<MJNode>)(List<?>)node.children();
+        return (List<MJNode>) (List<?>) node.children().stream().map(n -> {
+            if (n instanceof  VariableAccessNode){
+                return ((VariableAccessNode) n).definingExpression;
+            }
+            return n;
+        }).collect(Collectors.toList());
     }
 
     public Value evaluate(MJNode node){
-        System.out.println("Evaluate node " + node);
+        log(() -> "Evaluate node " + node + " " + nodeValue(node).get(1).deps.size());
         List<Value> args = paramNode(node).stream().map(this::nodeValue).map(this::replace).collect(Collectors.toList());
         Value newValue = op(node, args);
         if (inLoopMode() && nodeValue(node) != vl.bot()) { // dismiss first iteration
             Value oldValue = nodeValue(node);
             Value mergedValue = vl.mapBitsToValue(oldValue, newValue, this::merge);
-            if (oldValue != mergedValue){
+            if (!oldValue.valueEquals(mergedValue)){
+                log(() -> String.format("Update value for %s", node));
                 vl.mapBits(oldValue, mergedValue, (o, m) -> {
-                    Set<Bit> set = new HashSet<>(bitVersions(o));
-                    set.add(m);
-                    bitVersions(m, set);
+                    if (o != m) {
+                        m.version(o.version() + 1);
+                        log(() -> String.format("%20s → %s\n", o.repr(), m.repr()));
+                        if (m.version() > 5){
+                            throw new RuntimeException();
+                        }
+                        Set<Bit> set = new HashSet<>(bitVersions(o));
+                        set.add(m);
+                        bitVersions(m, set);
+                    }
                     return null;
                 });
+            } else {
+                log(() -> String.format("Update no value for %s", node));
             }
             newValue = mergedValue;
         }
@@ -499,10 +542,26 @@ public class Context {
         return weight(bit) == INFTY;
     }
 
+    DependencySet gatherControlDependencies(Bit bit){
+        Queue<Bit> q = new ArrayDeque<>();
+        Set<Bit> alreadyVisited = new HashSet<>();
+        Set<Bit> controlDeps = new HashSet<>();
+        q.add(bit);
+        while (!q.isEmpty()){
+            Bit cur = q.poll();
+            if (c(cur).size() > 0){
+                controlDeps.addAll(c(cur));
+            } else {
+                q.addAll(cur.deps);
+            }
+        }
+        return ds.create(controlDeps);
+    }
+
     public Bit merge(Bit o, Bit n){
         B vt = bs.sup(v(o), v(n));
         DependencySet dt = ds.sup(d(o), d(n));
-        DependencySet ct = ds.sup(c(o), c(n));
+        DependencySet ct = ds.sup(c(o), gatherControlDependencies(n));
         Bit m = new Bit(vt, dt, ct);
         if (sim(o, m)){
             return o;
@@ -537,7 +596,7 @@ public class Context {
                 continue;
             }
             alreadyVisited.add(x);
-            if (!anchorBits.contains(x)){
+            if (!x.isConstant() && !anchorBits.contains(x)){
                 if (directDependencies(x).isEmpty()){
                     return false;
                 }

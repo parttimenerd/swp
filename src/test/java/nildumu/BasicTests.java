@@ -65,7 +65,7 @@ public class BasicTests {
 
     @Test
     public void testBasicIf(){
-        parse("int x; if (1) { x = 1 }").hasValue("x1", 1);
+        parse("int x = 0; if (1) { x = 1 }").hasValue("x1", 1);
     }
 
     @Test

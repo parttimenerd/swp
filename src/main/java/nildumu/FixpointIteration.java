@@ -58,9 +58,13 @@ public class FixpointIteration {
             Parser.MJNode curNode = nodesToVisit.pop();
             for (BaseAST childNode : curNode.children()){
                 if (childNode instanceof Parser.ExpressionNode){
+                    if (childNode instanceof Parser.VariableAccessNode){
+                        childNode = ((Parser.VariableAccessNode) childNode).definingExpression;
+                    }
                     walkExpression(expressionConsumer, (Parser.ExpressionNode)childNode);
                 }
             }
+            //System.err.println(curNode);
             boolean somethingChanged = curNode.accept(nodeVisitor);
             if (somethingChanged || !visitedBefore.contains(curNode)) {
                 visitedBefore.add(curNode);
@@ -105,15 +109,16 @@ public class FixpointIteration {
      * Assumes expression trees.
      */
     public static void walkExpression(Consumer<Parser.ExpressionNode> visitor, Parser.ExpressionNode expression){
-        expression.children().stream().filter(c -> c instanceof Parser.ExpressionNode)
-                .forEach(c -> walkExpression(visitor, (Parser.ExpressionNode)c));
+        expression.children().stream().filter(c -> c instanceof Parser.ExpressionNode && !(c instanceof Parser.VariableAccessNode && !(c instanceof Parser.ParameterAccessNode)))
+                .forEach(c -> walkExpression(visitor, (Parser.ExpressionNode) c));
         visitor.accept(expression);
     }
+
     /**
      * Just lists the nodes in the order, that they would be traversed if the fix point would end after the first iteration
      */
     public static void trialRun(Parser.MJNode node){
-        worklist(new Parser.NodeVisitor<Boolean>() {
+        worklist2(new Parser.NodeVisitor<Boolean>() {
             @Override
             public Boolean visit(Parser.MJNode node) {
                 System.out.println("→ " + node.toString());
@@ -131,6 +136,8 @@ public class FixpointIteration {
                 }, expression);
                 return false;
             }
+        }, e -> {
+            System.out.println("    → " + e.toString() + " " + e.shortType());
         }, node, new HashSet<>());
     }
 }

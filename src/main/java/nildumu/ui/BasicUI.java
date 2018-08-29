@@ -7,10 +7,12 @@ import org.fife.ui.rsyntaxtextarea.*;
 import org.fife.ui.rtextarea.*;
 
 import java.awt.*;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.*;
+import java.sql.Time;
 import java.util.*;
 import java.util.List;
+import java.util.logging.*;
 import java.util.stream.Collectors;
 
 import javax.swing.*;
@@ -26,320 +28,6 @@ import static nildumu.Lattices.*;
 import static nildumu.Util.p;
 
 public class BasicUI {
-    private JPanel panel1;
-    private RSyntaxTextArea inputArea;
-    private JungPanel jungPanel;
-    private JComboBox attackerSecLevelInput;
-    private JButton resetButton;
-    private JTextArea outputArea;
-    private JTable leakageTable;
-    private JLabel parserErrorLabel;
-    private JCheckBox automaticRedrawCheckBox;
-    private JButton redrawButton;
-    private RTextScrollPane inputScrollArea;
-    private RSyntaxTextArea ssaArea;
-    private JTable nodeValueTable;
-    private JScrollPane nodeValueScrollPane;
-    private JComboBox storeSelectComboBox;
-    private JButton storeButton;
-    private JScrollPane variableValueScrollPane;
-    private JTable variableValueTable;
-    private JButton storeJsonButton;
-    private JComboBox modeComboBox;
-    private JCheckBox pruneCheckBox;
-    private JCheckBox autoRunCheckBox;
-    private JButton runButton;
-    private JButton stopButton;
-    private JComboBox methodHandlerSelectionComboxBox;
-    private Context context = null;
-    private DocumentListener documentListener;
-    private ResponsiveTimer graphViewRefreshTimer;
-    private ResponsiveTimer parseRefreshTimer;
-    private ResponsiveTimer processRefreshTimer;
-    private Object syntaxErrorHighlightTag = null;
-    private Object nodeSelectHighlightTag = null;
-    private boolean inLoadComboxBoxHandler = false;
-    private boolean inMHComboxBoxHandler = false;
-
-    public BasicUI() {
-        documentListener = new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent e) {
-                if (processRefreshTimer != null) {
-                    processRefreshTimer.request();
-                }
-                if (parseRefreshTimer != null) {
-                    parseRefreshTimer.request();
-                }
-            }
-
-            @Override
-            public void removeUpdate(DocumentEvent e) {
-                insertUpdate(e);
-            }
-
-            @Override
-            public void changedUpdate(DocumentEvent e) {
-                insertUpdate(e);
-            }
-        };
-        inputArea.getDocument().addDocumentListener(documentListener);
-        resetButton.addActionListener(e -> jungPanel.reset());
-        resetButton.addActionListener(e -> jungPanel.reset());
-        attackerSecLevelInput.addActionListener(e -> updateGraphView());
-        inputArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVA);
-        inputArea.setCodeFoldingEnabled(true);
-        inputArea.setMarkOccurrences(true);
-        inputArea.setAutoIndentEnabled(true);
-        inputArea.setCloseCurlyBraces(true);
-        inputArea.setCodeFoldingEnabled(true);
-        inputScrollArea.setLineNumbersEnabled(true);
-        inputScrollArea.setFoldIndicatorEnabled(true);
-        ssaArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVA);
-        ssaArea.setMarkOccurrences(true);
-        CompletionProvider provider = createCompletionProvider();
-        AutoCompletion ac = new AutoCompletion(provider);
-        ac.install(inputArea);
-
-        boolean shouldAutoRun = getVarContent("examples/lastAutoRun", "true").equals("true");
-        autoRunCheckBox.setSelected(shouldAutoRun);
-
-        for (Context.Mode mode : Context.Mode.values()) {
-            modeComboBox.addItem(mode);
-        }
-        modeComboBox.setSelectedItem(Context.Mode.valueOf(getVarContent("examples/lastMode", Context.Mode.BASIC.name())));
-        modeComboBox.addActionListener(a -> {
-            Context.Mode mode = (Context.Mode) modeComboBox.getSelectedItem();
-            storeVarInFile("examples/lastMode", mode.name());
-            processRefreshTimer.request();
-        });
-        graphViewRefreshTimer = new ResponsiveTimer(this::updateGraphView);
-        graphViewRefreshTimer.start();
-        processRefreshTimer = new ResponsiveTimer(() -> {
-            parseRefreshTimer.abort();
-            processAndUpdate(inputArea.getText());
-        });
-        processRefreshTimer.start();
-        processRefreshTimer.setAutoRun(shouldAutoRun);
-        parseRefreshTimer = new ResponsiveTimer(() -> {
-            if (!autoRunCheckBox.isSelected()) {
-                parse();
-            }
-        });
-        parseRefreshTimer.start();
-        boolean shouldAutoDraw = getVarContent("examples/lastAutoDraw", "true").equals("true");
-        automaticRedrawCheckBox.setSelected(shouldAutoDraw);
-        graphViewRefreshTimer.setAutoRun(shouldAutoDraw);
-        automaticRedrawCheckBox.addChangeListener(e -> {
-            graphViewRefreshTimer.setAutoRun(automaticRedrawCheckBox.isSelected());
-            storeVarInFile("examples/lastAutoDraw", automaticRedrawCheckBox.isSelected() + "");
-        });
-        redrawButton.addActionListener(e -> updateGraphView());
-        jungPanel.addNodeClickedHandler(this::updateNodeSelection);
-        storeSelectComboBox.addActionListener(a -> {
-            if (inLoadComboxBoxHandler) {
-                return;
-            }
-            String name = (String) storeSelectComboBox.getSelectedItem();
-            storeSelectComboBox.removeAllItems();
-            for (String n : getExampleNames()) {
-                storeSelectComboBox.addItem(n);
-            }
-            storeLastName(name);
-            load(name);
-            inLoadComboxBoxHandler = true;
-            storeSelectComboBox.setSelectedItem(getLastName());
-            inLoadComboxBoxHandler = false;
-        });
-        String lastContent = getLastContent();
-        inLoadComboxBoxHandler = true;
-        for (String n : getExampleNames()) {
-            storeSelectComboBox.addItem(n);
-        }
-        storeSelectComboBox.setSelectedItem(getLastName());
-        inLoadComboxBoxHandler = false;
-        methodHandlerSelectionComboxBox.addActionListener(a -> {
-            if (inMHComboxBoxHandler) {
-                return;
-            }
-            String props = (String) methodHandlerSelectionComboxBox.getSelectedItem();
-            try {
-                MethodInvocationHandler.parse(props);
-                methodHandlerSelectionComboxBox.removeAllItems();
-                storeMethodHandlerPropString(props);
-                for (String n : getExampleMethodHandlerPropStrings()) {
-                    methodHandlerSelectionComboxBox.addItem(n);
-                }
-                inMHComboxBoxHandler = true;
-                methodHandlerSelectionComboxBox.setSelectedItem(props);
-                inMHComboxBoxHandler = false;
-                processRefreshTimer.request();
-            } catch (NildumuError e) {
-                parserErrorLabel.setText(e.getMessage());
-                addOutput(e.getMessage());
-                e.printStackTrace();
-            }
-        });
-        String props = getVarContent("examples/lastMHProps", MethodInvocationHandler.getDefaultPropString());
-        inMHComboxBoxHandler = true;
-        for (String n : getExampleMethodHandlerPropStrings()) {
-            methodHandlerSelectionComboxBox.addItem(n);
-        }
-        methodHandlerSelectionComboxBox.setSelectedItem(props);
-        inMHComboxBoxHandler = false;
-        storeButton.addActionListener(a -> store((String) storeSelectComboBox.getSelectedItem()));
-        storeJsonButton.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser();
-            fileChooser.setCurrentDirectory(Paths.get(getVarContent("examples/lastJSONDir", ".")).toFile());
-            fileChooser.setDialogType(JFileChooser.SAVE_DIALOG);
-            if (fileChooser.showDialog(panel1, "Choose file to export json") == JFileChooser.APPROVE_OPTION) {
-                Path path = fileChooser.getSelectedFile().toPath();
-                storeGraphJSON(path);
-                storeVarInFile("examples/lastJSONDir", path.getParent().toString());
-            }
-        });
-        pruneCheckBox.addActionListener(e -> {
-            graphViewRefreshTimer.request();
-        });
-        stopButton.addActionListener(e -> {
-            processRefreshTimer.abort();
-            graphViewRefreshTimer.abort();
-        });
-        runButton.addActionListener(e -> {
-            new Thread(() -> {
-                processRefreshTimer.abort();
-                String oldText = runButton.getText();
-                runButton.setText("…");
-                processRefreshTimer.run();
-                runButton.setText(oldText);
-            }).start();
-        });
-        autoRunCheckBox.addActionListener(e -> {
-            processRefreshTimer.setAutoRun(autoRunCheckBox.isSelected());
-            storeVarInFile("examples/lastAutoRun", autoRunCheckBox.isSelected() + "");
-        });
-        inputArea.setText(lastContent);
-    }
-
-    public void processAndUpdate(String program) {
-        if (program.isEmpty()) {
-            return;
-        }
-        storeLastContent(program);
-        clearOutput();
-        parserErrorLabel.setText("");
-        if (syntaxErrorHighlightTag != null) {
-            inputArea.getHighlighter().removeHighlight(syntaxErrorHighlightTag);
-        }
-        if (nodeSelectHighlightTag != null) {
-            inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
-        }
-        try {
-            ssaArea.setText(Parser.process(program).toPrettyString());
-            Context.Mode mode = (Context.Mode) modeComboBox.getSelectedItem();
-            Context c = Processor.process(program, mode, MethodInvocationHandler.parse(methodHandlerSelectionComboxBox.getSelectedItem().toString()));
-            if (context == null || c.sl != context.sl) {
-                context = c;
-                updateSecLattice();
-            }
-            context = c;
-            updateLeakageTable(context);
-            updateNodeValueTable(context);
-            updateVariableValueTable(context);
-            graphViewRefreshTimer.request();
-            context.checkInvariants();
-        } catch (LocatedSWPException e) {
-            parserErrorLabel.setText(e.getMessage());
-            Location errorLocation = e.errorToken.location;
-            int startOffset = 0;
-            try {
-                startOffset = inputArea.getLineStartOffset(errorLocation.line - 1) + errorLocation.column;
-                syntaxErrorHighlightTag = inputArea.getHighlighter().addHighlight(startOffset, startOffset + e.errorToken.value.length(), new SquiggleUnderlineHighlightPainter(Color.red));
-                inputArea.invalidate();
-                inputArea.repaint();
-            } catch (BadLocationException e1) {
-                e1.printStackTrace();
-            }
-        } catch (Parser.MJError e) {
-            parserErrorLabel.setText(e.getMessage());
-        } catch (NildumuError e) {
-            addOutput(e.getMessage());
-            parserErrorLabel.setText(e.getMessage());
-        } catch (RuntimeException e) {
-            parserErrorLabel.setText(e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    void parse() {
-        parserErrorLabel.setText("");
-        String program = inputArea.getText();
-        if (program.isEmpty()) {
-            return;
-        }
-        storeLastContent(program);
-        clearOutput();
-        if (syntaxErrorHighlightTag != null) {
-            inputArea.getHighlighter().removeHighlight(syntaxErrorHighlightTag);
-        }
-        if (nodeSelectHighlightTag != null) {
-            inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
-        }
-        try {
-            ssaArea.setText(Parser.process(program).toPrettyString());
-        } catch (LocatedSWPException e) {
-            parserErrorLabel.setText(e.getMessage());
-            Location errorLocation = e.errorToken.location;
-            int startOffset = 0;
-            try {
-                startOffset = inputArea.getLineStartOffset(errorLocation.line - 1) + errorLocation.column;
-                syntaxErrorHighlightTag = inputArea.getHighlighter().addHighlight(startOffset, startOffset + e.errorToken.value.length(), new SquiggleUnderlineHighlightPainter(Color.red));
-                inputArea.invalidate();
-                inputArea.repaint();
-            } catch (BadLocationException e1) {
-                e1.printStackTrace();
-            }
-        } catch (Parser.MJError e) {
-            parserErrorLabel.setText(e.getMessage());
-        } catch (NildumuError e) {
-            addOutput(e.getMessage());
-            parserErrorLabel.setText(e.getMessage());
-        } catch (RuntimeException e) {
-            parserErrorLabel.setText(e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    public void updateNodeSelection(LeakageCalculation.VisuNode selectedNode) {
-        if (nodeSelectHighlightTag != null) {
-            inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
-        }
-        if (selectedNode.node() != null) {
-            Location location = selectedNode.node().location;
-            try {
-                int startOffset = inputArea.getLineStartOffset(location.line - 1) + location.column;
-                nodeSelectHighlightTag = inputArea.getHighlighter().addHighlight(startOffset, startOffset + 1, new ChangeableHighlightPainter(new Color(71, 239, 133)));
-                inputArea.invalidate();
-                inputArea.repaint();
-            } catch (BadLocationException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private void updateGraphView() {
-        if (context != null) {
-            try {
-                if (attackerSecLevelInput.getSelectedItem() == null) {
-                    return;
-                }
-                jungPanel.update(context.getJungGraphForVisu(((SecWrapper) attackerSecLevelInput.getSelectedItem()).sec, pruneCheckBox.isSelected()));
-            } catch (RuntimeException error) {
-                parserErrorLabel.setText(error.getMessage());
-                error.printStackTrace();
-            }
-        }
-    }
 
     {
 // GUI initializer generated by IntelliJ IDEA GUI Designer
@@ -423,7 +111,7 @@ public class BasicUI {
         inputArea.setPaintMatchedBracketPair(true);
         inputScrollArea.setViewportView(inputArea);
         final JPanel panel6 = new JPanel();
-        panel6.setLayout(new GridLayoutManager(1, 5, new Insets(0, 0, 0, 0), -1, -1));
+        panel6.setLayout(new GridLayoutManager(1, 6, new Insets(0, 0, 0, 0), -1, -1));
         panel4.add(panel6, new GridConstraints(2, 0, 1, 9, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
         runButton = new JButton();
         runButton.setText("\uD83E\uDC92");
@@ -433,13 +121,16 @@ public class BasicUI {
         stopButton.setText("\u23F9");
         panel6.add(stopButton, new GridConstraints(0, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(10, -1), null, 0, false));
         modeComboBox = new JComboBox();
-        panel6.add(modeComboBox, new GridConstraints(0, 3, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel6.add(modeComboBox, new GridConstraints(0, 4, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         autoRunCheckBox = new JCheckBox();
         autoRunCheckBox.setText("\u2B94");
         autoRunCheckBox.setToolTipText("Auto run the processing of the program");
         panel6.add(autoRunCheckBox, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         methodHandlerSelectionComboxBox = new JComboBox();
-        panel6.add(methodHandlerSelectionComboxBox, new GridConstraints(0, 4, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        methodHandlerSelectionComboxBox.setEditable(true);
+        panel6.add(methodHandlerSelectionComboxBox, new GridConstraints(0, 5, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        outputModeComboxBox = new JComboBox();
+        panel6.add(outputModeComboxBox, new GridConstraints(0, 3, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         final JPanel panel7 = new JPanel();
         panel7.setLayout(new GridLayoutManager(1, 9, new Insets(0, 0, 0, 0), -1, -1));
         panel4.add(panel7, new GridConstraints(0, 0, 1, 9, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
@@ -487,6 +178,376 @@ public class BasicUI {
         return panel1;
     }
 
+    private enum OutputMode {
+        ALL,
+        WONR,
+        MIN
+    }
+
+    private JPanel panel1;
+    private RSyntaxTextArea inputArea;
+    private JungPanel jungPanel;
+    private JComboBox attackerSecLevelInput;
+    private JButton resetButton;
+    private JTextArea outputArea;
+    private JTable leakageTable;
+    private JLabel parserErrorLabel;
+    private JCheckBox automaticRedrawCheckBox;
+    private JButton redrawButton;
+    private RTextScrollPane inputScrollArea;
+    private RSyntaxTextArea ssaArea;
+    private JTable nodeValueTable;
+    private JScrollPane nodeValueScrollPane;
+    private JComboBox storeSelectComboBox;
+    private JButton storeButton;
+    private JScrollPane variableValueScrollPane;
+    private JTable variableValueTable;
+    private JButton storeJsonButton;
+    private JComboBox modeComboBox;
+    private JCheckBox pruneCheckBox;
+    private JCheckBox autoRunCheckBox;
+    private JButton runButton;
+    private JButton stopButton;
+    private JComboBox methodHandlerSelectionComboxBox;
+    private JComboBox outputModeComboxBox;
+    private Context context = null;
+    private DocumentListener documentListener;
+    private ResponsiveTimer graphViewRefreshTimer;
+    private ResponsiveTimer parseRefreshTimer;
+    private ResponsiveTimer processRefreshTimer;
+    private Object syntaxErrorHighlightTag = null;
+    private Object nodeSelectHighlightTag = null;
+    private boolean inLoadComboxBoxHandler = false;
+    private boolean inMHComboxBoxHandler = false;
+    private OutputMode outputMode;
+    private PrintStream stdOut = System.out;
+
+    public BasicUI() {
+        documentListener = new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                if (processRefreshTimer != null) {
+                    processRefreshTimer.request();
+                }
+                if (parseRefreshTimer != null) {
+                    parseRefreshTimer.request();
+                }
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                insertUpdate(e);
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                insertUpdate(e);
+            }
+        };
+        inputArea.getDocument().addDocumentListener(documentListener);
+        resetButton.addActionListener(e -> jungPanel.reset());
+        resetButton.addActionListener(e -> jungPanel.reset());
+        attackerSecLevelInput.addActionListener(e -> updateGraphView());
+        inputArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVA);
+        inputArea.setCodeFoldingEnabled(true);
+        inputArea.setMarkOccurrences(true);
+        inputArea.setAutoIndentEnabled(true);
+        inputArea.setCloseCurlyBraces(true);
+        inputArea.setCodeFoldingEnabled(true);
+        inputScrollArea.setLineNumbersEnabled(true);
+        inputScrollArea.setFoldIndicatorEnabled(true);
+        ssaArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVA);
+        ssaArea.setMarkOccurrences(true);
+        CompletionProvider provider = createCompletionProvider();
+        AutoCompletion ac = new AutoCompletion(provider);
+        ac.install(inputArea);
+
+        boolean shouldAutoRun = getVarContent("examples/lastAutoRun", "true").equals("true");
+        autoRunCheckBox.setSelected(shouldAutoRun);
+        for (Context.Mode mode : Context.Mode.values()) {
+            modeComboBox.addItem(mode);
+        }
+        modeComboBox.setSelectedItem(Context.Mode.valueOf(getVarContent("examples/lastMode", Context.Mode.BASIC.name())));
+        modeComboBox.addActionListener(a -> {
+            Context.Mode mode = (Context.Mode) modeComboBox.getSelectedItem();
+            storeVarInFile("examples/lastMode", mode.name());
+            processRefreshTimer.request();
+        });
+        for (OutputMode mode : OutputMode.values()) {
+            outputModeComboxBox.addItem(mode);
+        }
+        setOutputMode(OutputMode.valueOf(getVarContent("examples/lastOutputMode", OutputMode.ALL.name())));
+        outputModeComboxBox.setSelectedItem(outputMode);
+        outputModeComboxBox.addActionListener(a -> {
+            setOutputMode((OutputMode) outputModeComboxBox.getSelectedItem());
+            processRefreshTimer.request();
+        });
+        graphViewRefreshTimer = new ResponsiveTimer(this::updateGraphView);
+        boolean shouldAutoDraw = getVarContent("examples/lastAutoDraw", "true").equals("true");
+        graphViewRefreshTimer.setAutoRun(shouldAutoDraw);
+        graphViewRefreshTimer.start();
+        processRefreshTimer = new ResponsiveTimer(() -> {
+            parseRefreshTimer.abort();
+            processAndUpdate(inputArea.getText());
+        });
+        processRefreshTimer.setAutoRun(shouldAutoRun);
+        processRefreshTimer.start();
+        parseRefreshTimer = new ResponsiveTimer(() -> {
+            if (!autoRunCheckBox.isSelected()) {
+                parse();
+            }
+        });
+        parseRefreshTimer.start();
+        automaticRedrawCheckBox.setSelected(shouldAutoDraw);
+        automaticRedrawCheckBox.addChangeListener(e -> {
+            graphViewRefreshTimer.setAutoRun(automaticRedrawCheckBox.isSelected());
+            storeVarInFile("examples/lastAutoDraw", automaticRedrawCheckBox.isSelected() + "");
+        });
+        redrawButton.addActionListener(e -> updateGraphView());
+        jungPanel.addNodeClickedHandler(this::updateNodeSelection);
+        storeSelectComboBox.addActionListener(a -> {
+            if (inLoadComboxBoxHandler) {
+                return;
+            }
+            String name = (String) storeSelectComboBox.getSelectedItem();
+            storeSelectComboBox.removeAllItems();
+            for (String n : getExampleNames()) {
+                storeSelectComboBox.addItem(n);
+            }
+            storeLastName(name);
+            load(name);
+            inLoadComboxBoxHandler = true;
+            storeSelectComboBox.setSelectedItem(getLastName());
+            inLoadComboxBoxHandler = false;
+        });
+        String lastContent = getLastContent();
+        inLoadComboxBoxHandler = true;
+        for (String n : getExampleNames()) {
+            storeSelectComboBox.addItem(n);
+        }
+        storeSelectComboBox.setSelectedItem(getLastName());
+        inLoadComboxBoxHandler = false;
+        methodHandlerSelectionComboxBox.addActionListener(a -> {
+            if (inMHComboxBoxHandler) {
+                return;
+            }
+            String props = (String) methodHandlerSelectionComboxBox.getSelectedItem();
+            try {
+                MethodInvocationHandler.parse(props);
+                methodHandlerSelectionComboxBox.removeAllItems();
+                storeMethodHandlerPropString(props);
+                for (String n : getExampleMethodHandlerPropStrings()) {
+                    methodHandlerSelectionComboxBox.addItem(n);
+                }
+                inMHComboxBoxHandler = true;
+                methodHandlerSelectionComboxBox.setSelectedItem(props);
+                inMHComboxBoxHandler = false;
+                processRefreshTimer.request();
+                if (parserErrorLabel.getText().contains("method invocation handler")) {
+                    parserErrorLabel.setText("");
+                }
+            } catch (NildumuError e) {
+                parserErrorLabel.setText(e.getMessage());
+                addOutput(e.getMessage());
+                e.printStackTrace();
+            }
+        });
+        String props = getVarContent("examples/lastMHProps", MethodInvocationHandler.getDefaultPropString());
+        inMHComboxBoxHandler = true;
+        for (String n : getExampleMethodHandlerPropStrings()) {
+            methodHandlerSelectionComboxBox.addItem(n);
+        }
+        methodHandlerSelectionComboxBox.setSelectedItem(props);
+        inMHComboxBoxHandler = false;
+        storeButton.addActionListener(a -> store((String) storeSelectComboBox.getSelectedItem()));
+        storeJsonButton.addActionListener(e -> {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setCurrentDirectory(Paths.get(getVarContent("examples/lastJSONDir", ".")).toFile());
+            fileChooser.setDialogType(JFileChooser.SAVE_DIALOG);
+            if (fileChooser.showDialog(panel1, "Choose file to export json") == JFileChooser.APPROVE_OPTION) {
+                Path path = fileChooser.getSelectedFile().toPath();
+                storeGraphJSON(path);
+                storeVarInFile("examples/lastJSONDir", path.getParent().toString());
+            }
+        });
+        pruneCheckBox.addActionListener(e -> {
+            graphViewRefreshTimer.request();
+        });
+        stopButton.addActionListener(e -> {
+            processRefreshTimer.abort();
+            graphViewRefreshTimer.abort();
+        });
+        runButton.addActionListener(e -> {
+            new Thread(() -> {
+                processRefreshTimer.abort();
+                runButton.setText("…");
+                processRefreshTimer.run();
+                runButton.setText("\uD83E\uDC92");
+            }).start();
+        });
+        autoRunCheckBox.addActionListener(e -> {
+            processRefreshTimer.setAutoRun(autoRunCheckBox.isSelected());
+            storeVarInFile("examples/lastAutoRun", autoRunCheckBox.isSelected() + "");
+        });
+        inputArea.setText(lastContent);
+    }
+
+    public void processAndUpdate(String program) {
+        if (program.isEmpty()) {
+            return;
+        }
+        storeLastContent(program);
+        clearOutput();
+        parserErrorLabel.setText("");
+        if (syntaxErrorHighlightTag != null) {
+            inputArea.getHighlighter().removeHighlight(syntaxErrorHighlightTag);
+        }
+        if (nodeSelectHighlightTag != null) {
+            inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
+        }
+        try {
+            ssaArea.setText(Parser.process(program).toPrettyString());
+            Context.Mode mode = (Context.Mode) modeComboBox.getSelectedItem();
+            long time = System.currentTimeMillis();
+            Context c = Processor.process(program, mode, MethodInvocationHandler.parse(methodHandlerSelectionComboxBox.getSelectedItem().toString()));
+            if (context == null || c.sl != context.sl) {
+                context = c;
+                updateSecLattice();
+            }
+            context = c;
+            long analysisTime = System.currentTimeMillis() - time;
+            updateLeakageTable(context);
+            addOutput(String.format(String.format("Analysis: %,dms, #Bits: %,d", analysisTime, Bit.getNumberOfCreatedBits())));
+            if (shouldUpdateNodeValueTable()) {
+                updateNodeValueTable(context);
+            }
+            if (shouldUpdateVariableValueTable()) {
+                updateVariableValueTable(context);
+            }
+            if (shouldUpdateGraph()) {
+                graphViewRefreshTimer.request();
+            }
+            updateLeakageTable(c);
+            context.checkInvariants();
+        } catch (LocatedSWPException e) {
+            parserErrorLabel.setText(e.getMessage());
+            Location errorLocation = e.errorToken.location;
+            int startOffset = 0;
+            try {
+                startOffset = inputArea.getLineStartOffset(errorLocation.line - 1) + errorLocation.column;
+                syntaxErrorHighlightTag = inputArea.getHighlighter().addHighlight(startOffset, startOffset + e.errorToken.value.length(), new SquiggleUnderlineHighlightPainter(Color.red));
+                inputArea.invalidate();
+                inputArea.repaint();
+            } catch (BadLocationException e1) {
+                e1.printStackTrace();
+            }
+        } catch (Parser.MJError e) {
+            parserErrorLabel.setText(e.getMessage());
+        } catch (NildumuError e) {
+            addOutput(e.getMessage());
+            parserErrorLabel.setText(e.getMessage());
+        } catch (RuntimeException e) {
+            parserErrorLabel.setText(e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    boolean shouldUpdateVariableValueTable() {
+        return outputMode.ordinal() <= OutputMode.WONR.ordinal();
+    }
+
+    boolean shouldUpdateNodeValueTable() {
+        return outputMode.ordinal() <= OutputMode.ALL.ordinal();
+    }
+
+    boolean shouldUpdateGraph() {
+        return getVarContent("examples/lastAutoDraw", "true").equals("true");
+    }
+
+    boolean shouldLogOnStdOut() {
+        return outputMode == OutputMode.ALL;
+    }
+
+    void setOutputMode(OutputMode newMode) {
+        outputMode = newMode;
+        storeVarInFile("examples/lastOutputMode", outputMode.name());
+        if (outputMode == OutputMode.ALL) {
+            context.LOG.setLevel(Level.FINE);
+        } else {
+            context.LOG.setLevel(Level.WARNING);
+        }
+    }
+
+    void parse() {
+        parserErrorLabel.setText("");
+        String program = inputArea.getText();
+        if (program.isEmpty()) {
+            return;
+        }
+        storeLastContent(program);
+        clearOutput();
+        if (syntaxErrorHighlightTag != null) {
+            inputArea.getHighlighter().removeHighlight(syntaxErrorHighlightTag);
+        }
+        if (nodeSelectHighlightTag != null) {
+            inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
+        }
+        try {
+            ssaArea.setText(Parser.process(program).toPrettyString());
+        } catch (LocatedSWPException e) {
+            parserErrorLabel.setText(e.getMessage());
+            Location errorLocation = e.errorToken.location;
+            int startOffset = 0;
+            try {
+                startOffset = inputArea.getLineStartOffset(errorLocation.line - 1) + errorLocation.column;
+                syntaxErrorHighlightTag = inputArea.getHighlighter().addHighlight(startOffset, startOffset + e.errorToken.value.length(), new SquiggleUnderlineHighlightPainter(Color.red));
+                inputArea.invalidate();
+                inputArea.repaint();
+            } catch (BadLocationException e1) {
+                e1.printStackTrace();
+            }
+        } catch (Parser.MJError e) {
+            parserErrorLabel.setText(e.getMessage());
+        } catch (NildumuError e) {
+            addOutput(e.getMessage());
+            parserErrorLabel.setText(e.getMessage());
+        } catch (RuntimeException e) {
+            parserErrorLabel.setText(e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public void updateNodeSelection(LeakageCalculation.VisuNode selectedNode) {
+        if (nodeSelectHighlightTag != null) {
+            inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
+        }
+        if (selectedNode.node() != null) {
+            Location location = selectedNode.node().location;
+            try {
+                int startOffset = inputArea.getLineStartOffset(location.line - 1) + location.column;
+                nodeSelectHighlightTag = inputArea.getHighlighter().addHighlight(startOffset, startOffset + 1, new ChangeableHighlightPainter(new Color(71, 239, 133)));
+                inputArea.invalidate();
+                inputArea.repaint();
+            } catch (BadLocationException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void updateGraphView() {
+        if (context != null) {
+            try {
+                if (attackerSecLevelInput.getSelectedItem() == null) {
+                    return;
+                }
+                jungPanel.update(context.getJungGraphForVisu(((SecWrapper) attackerSecLevelInput.getSelectedItem()).sec, pruneCheckBox.isSelected()));
+            } catch (RuntimeException error) {
+                parserErrorLabel.setText(error.getMessage());
+                error.printStackTrace();
+            }
+        }
+    }
+
     private static class SecWrapper {
         final Sec<?> sec;
 
@@ -522,10 +583,10 @@ public class BasicUI {
     }
 
     private void updateLeakageTable(Context context) {
+        List<Sec<?>> secLevels = new ArrayList<>((Set<Sec<?>>) context.sl.elements());
+        secLevels.forEach(s -> context.getLeakageGraph().leakage(s));
         leakageTable.setTableHeader(new JTableHeader());
         leakageTable.setModel(new AbstractTableModel() {
-
-            List<Sec<?>> secLevels = new ArrayList<>((Set<Sec<?>>) context.sl.elements());
 
             @Override
             public int getRowCount() {
@@ -577,6 +638,9 @@ public class BasicUI {
 
             @Override
             public Object getValueAt(int rowIndex, int columnIndex) {
+                if (nodes.get(rowIndex) == null) {
+                    return "";
+                }
                 switch (columnIndex) {
                     case 0:
                         return nodes.get(rowIndex).getTextualId();

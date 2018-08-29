@@ -21,6 +21,7 @@ public class IOValues {
 
     private final Map<Sec<?>, Set<Value>> valuesPerSec;
     private final Map<Value, Sec<?>> secPerValue;
+    private final Map<Bit, Sec<?>> secPerBit;
     private final Set<Bit> bits;
 
     IOValues() {
@@ -29,8 +30,9 @@ public class IOValues {
             public Set<Value> defaultValue(Map<Sec<?>, Set<Value>> map, Sec<?> key) {
                 return new LinkedHashSet<>();
             }
-        }, FORBID_DELETIONS, FORBID_VALUE_UPDATES);
+        }, FORBID_DELETIONS);
         this.secPerValue = new DefaultMap<>(new HashMap<>(), FORBID_DELETIONS, FORBID_VALUE_UPDATES);
+        this.secPerBit = new DefaultMap<>(new HashMap<>(), FORBID_DELETIONS);
         this.bits = new LinkedHashSet<>();
     }
 
@@ -40,7 +42,10 @@ public class IOValues {
             throw new MultipleLevelsPerValue(value);
         }
         valuesPerSec.get(sec).add(value);
-        value.forEach(this::add);
+        value.forEach(b -> {
+            add(b);
+            secPerBit.put(b, sec);
+        });
         secPerValue.put(value, sec);
     }
 
@@ -70,7 +75,7 @@ public class IOValues {
     }
 
     public List<Bit> getBits(Sec sec){
-        return bits.stream().filter(b -> getSec(b.value()) == sec).collect(Collectors.toList());
+        return bits.stream().filter(b -> getSec(b) == sec).collect(Collectors.toList());
     }
 
     @Override
@@ -83,7 +88,7 @@ public class IOValues {
     }
 
     public Sec<?> getSec(Bit bit){
-        return getSec(bit.value());
+        return secPerBit.get(bit);
     }
 
     public boolean hasBitWithoutValue(){

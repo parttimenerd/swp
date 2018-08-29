@@ -27,6 +27,7 @@ public class FunctionTests {
     @CsvSource({
             "'int bla(){return 1} int x = bla()', '1'",
             "'int bla(int a){return a} int x = bla(1)', '1'",
+            "'int bla(int a){return a | 1} int x = bla(1)', '1'",
             "'int bla(int a){return a + 1} int x = bla(1)', '2'"
     })
     public void testBasicFunctionCalls(String program, String expectedValue){
