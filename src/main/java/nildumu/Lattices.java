@@ -634,6 +634,8 @@ public class Lattices {
 
         private final static BitLattice BIT_LATTICE = new BitLattice();
 
+        private final static DefaultMap<B, Bit> constBits = new DefaultMap<B, Bit>((bBitMap, b) -> new Bit(b));
+
         Bit bot;
 
         public BitLattice() {
@@ -642,20 +644,42 @@ public class Lattices {
 
         @Override
         public Bit sup(Bit a, Bit b) {
-            return new Bit(bs.sup(a.val, b.val), ds.sup(a.dataDeps, b.dataDeps), ds.sup(a.dataDeps, b.dataDeps));
+            return create(bs.sup(a.val, b.val), ds.sup(a.dataDeps, b.dataDeps), ds.sup(a.dataDeps, b.dataDeps));
         }
 
         @Override
         public Bit inf(Bit a, Bit b) {
-            return new Bit(bs.inf(a.val, b.val), ds.inf(a.dataDeps, b.dataDeps), ds.inf(a.dataDeps, b.dataDeps));
+            return create(bs.inf(a.val, b.val), ds.inf(a.dataDeps, b.dataDeps), ds.inf(a.dataDeps, b.dataDeps));
         }
 
         @Override
         public Bit bot() {
             if (bot == null){
-                bot = new Bit(X);
+                bot = create(X);
             }
             return bot;
+        }
+
+        public Bit create(B val){
+            if (val != U){
+                return constBits.get(val);
+            }
+            return new Bit(val);
+        }
+
+        public Bit create(B val, DependencySet dataDeps, DependencySet controlDeps) {
+            if (val != U){
+                return create(val);
+            }
+            return new Bit(val, dataDeps, controlDeps);
+        }
+
+        public Bit forceCreate(B val){
+            return new Bit(val);
+        }
+
+        public Bit forceCreate(B val, DependencySet dataDeps, DependencySet controlDeps) {
+            return new Bit(val, dataDeps, controlDeps);
         }
 
         @Override
@@ -772,7 +796,7 @@ public class Lattices {
         private Value value = null;
         private int version = 0;
 
-        public Bit(B val, DependencySet dataDeps, DependencySet controlDeps) {
+        private Bit(B val, DependencySet dataDeps, DependencySet controlDeps) {
             this.val = val;
             this.dataDeps = dataDeps;
             this.controlDeps = controlDeps;
@@ -781,7 +805,7 @@ public class Lattices {
             assert checkInvariant();
         }
 
-        Bit(B val){
+        private Bit(B val){
             this(val, ds == null ? new DependencySet(set()) : ds.bot(),
                     ds == null ? new DependencySet(set()) : ds.bot());
         }
@@ -882,6 +906,10 @@ public class Lattices {
 
         public static long getNumberOfCreatedBits(){
             return NUMBER_OF_BITS;
+        }
+
+        public static void resetNumberOfCreatedBits(){
+            NUMBER_OF_BITS = 0;
         }
     }
 

@@ -541,7 +541,7 @@ public class LeakageCalculation {
     }
 
     private static Bit bit(String description) {
-        Bit bit = new Bit(X);
+        Bit bit = bl.forceCreate(X);
         Value value = new Value(bit, bit).description(description);
         return bit;
     }

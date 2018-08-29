@@ -562,7 +562,7 @@ public class Context {
         B vt = bs.sup(v(o), v(n));
         DependencySet dt = ds.sup(d(o), d(n));
         DependencySet ct = ds.sup(c(o), gatherControlDependencies(n));
-        Bit m = new Bit(vt, dt, ct);
+        Bit m = bl.create(vt, dt, ct);
         if (sim(o, m)){
             return o;
         }

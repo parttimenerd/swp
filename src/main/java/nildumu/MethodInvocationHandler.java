@@ -113,7 +113,6 @@ public abstract class MethodInvocationHandler {
         public Value analyze(Context c, MethodNode method, List<Value> arguments) {
             if (methodCallCounter.get(method) < maxRec) {
                 methodCallCounter.put(method, methodCallCounter.get(method) + 1);
-                System.out.println(String.format("called method %s", method));
                 c.variableStates.push(new State());
                 for (int i = 0; i < arguments.size(); i++) {
                     c.setVariableValue(method.parameters.get(i).definition, arguments.get(i));
@@ -136,7 +135,7 @@ public abstract class MethodInvocationHandler {
                     return vl.bot();
                 }
                 DependencySet set = arguments.stream().flatMap(Value::stream).collect(DependencySet.collector());
-                return IntStream.range(0, arguments.stream().mapToInt(Value::size).max().getAsInt()).mapToObj(i -> new Bit(U, set, ds.bot())).collect(Value.collector());
+                return IntStream.range(0, arguments.stream().mapToInt(Value::size).max().getAsInt()).mapToObj(i -> bl.create(U, set, ds.bot())).collect(Value.collector());
             }
         });
         examplePropLines.add("handler=basic");

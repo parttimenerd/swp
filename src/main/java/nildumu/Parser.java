@@ -125,6 +125,7 @@ public class Parser implements Serializable {
             (builder) -> {
                 builder.addRule("program", "use_sec? bit_width? lines", asts -> {
                             MJNode.resetIdCounter();
+                            Bit.resetNumberOfCreatedBits();
                             SecurityLattice<?> secLattice = asts.get(0).children().isEmpty() ? BasicSecLattice.get() : ((ListAST<WrapperNode<SecurityLattice<?>>>)asts.get(0)).get(0).wrapped;
                             int declaredBitWidth = asts.get(1).children().isEmpty() ? -1 : ((ListAST<WrapperNode<Integer>>)asts.get(1)).get(0).wrapped;
                             /**

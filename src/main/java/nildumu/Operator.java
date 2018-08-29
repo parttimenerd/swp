@@ -41,96 +41,12 @@ public interface Operator {
             return variable.toString();
         }
 
-        void checkArguments(List<Value> arguments){
-            if (arguments.size() != 0){
+        void checkArguments(List<Value> arguments) {
+            if (arguments.size() != 0) {
                 throw new WrongArgumentNumber(variable.toString(), arguments.size(), 0);
             }
         }
     }
-
-    /*public static class VariableAccess implements Operator {
-
-        private final Variable variable;
-
-        public VariableAccess(Variable variable) {
-            this.variable = variable;
-        }
-
-        @Override
-        public Value compute(Context c, List<Value> arguments) {
-            checkArguments(arguments);
-            return c.getVariableValue(variable);
-        }
-
-        @Override
-        public String toString(List<Value> arguments) {
-            checkArguments(arguments);
-            return variable.toString();
-        }
-
-        void checkArguments(List<Value> arguments){
-            if (arguments.size() != 0){
-                throw new WrongArgumentNumber(variable.toString(), arguments.size(), 0);
-            }
-        }
-    }
-
-    public static class VariableAssignment implements Operator {
-
-        final Variable variable;
-
-        public VariableAssignment(Variable variable) {
-            this.variable = variable;
-        }
-
-        @Override
-        public Value compute(Context c, List<Value> arguments) {
-            checkArguments(arguments);
-            return c.setVariableValue(variable, arguments.get(0));
-        }
-
-        @Override
-        public String toString(List<Value> arguments) {
-            checkArguments(arguments);
-            return variable.toString();
-        }
-
-        void checkArguments(List<Value> arguments){
-            if (arguments.size() != 1){
-                throw new WrongArgumentNumber(variable.toString() + "=", arguments.size(), 1);
-            }
-        }
-    }
-
-    public static class OutputVariableAssignment extends VariableAssignment {
-
-        private final Sec<?> sec;
-
-        public OutputVariableAssignment(Variable variable, Sec<?> sec) {
-            super(variable);
-            assert variable.isOutput;
-            this.sec = sec;
-        }
-
-        @Override
-        public Value compute(Context c, List<Value> arguments) {
-            checkArguments(arguments);
-            c.addOutputValue(sec, arguments.get(0));
-            return c.setVariableValue(variable, arguments.get(0));
-        }
-
-        @Override
-        public String toString(List<Value> arguments) {
-            checkArguments(arguments);
-            return variable.toString();
-        }
-
-        void checkArguments(List<Value> arguments){
-            if (arguments.size() != 1){
-                throw new WrongArgumentNumber(variable.toString() + "=", arguments.size(), 1);
-            }
-        }
-    }*/
 
     public static class LiteralOperator implements Operator {
         private final Value literal;
@@ -307,11 +223,11 @@ public interface Operator {
         Bit compute(Context c, Bit x, Bit y) {
             Lattices.B bitValue = computeBitValue(x, y);
             if (bitValue.isConstant()) {
-                return new Bit(bitValue);
+                return bl.create(bitValue);
             }
             DependencySet dataDeps = computeDataDependencies(x, y, bitValue);
             DependencySet controlDeps = computeControlDeps(c, currentNode, bitValue, dataDeps);
-            Bit r = new Bit(bitValue, dataDeps, controlDeps);
+            Bit r = bl.create(bitValue, dataDeps, controlDeps);
             c.repl(r, computeModificator(x, y, r, dataDeps));
             return r;
         }
@@ -371,11 +287,11 @@ public interface Operator {
         Bit computeBit(Context c, List<Bit> bits) {
             Lattices.B bitValue = computeBitValue(bits);
             if (bitValue.isConstant()) {
-                return new Bit(bitValue);
+                return bl.create(bitValue);
             }
             DependencySet dataDeps = computeDataDependencies(bits, bitValue);
             DependencySet controlDeps = computeControlDeps(c, currentNode, bitValue, dataDeps);
-            Bit r = new Bit(bitValue, dataDeps, controlDeps);
+            Bit r = bl.create(bitValue, dataDeps, controlDeps);
             c.repl(r, computeModsCreator(r, dataDeps));
             return r;
         }
@@ -405,9 +321,9 @@ public interface Operator {
                 List<Bit> bits = new ArrayList<>();
                 for (int i = 0; i < x.size(); i++){
                     if (bitValues.get(i).isConstant()){
-                        bits.add(new Bit(bitValues.get(i)));
+                        bits.add(bl.create(bitValues.get(i)));
                     } else {
-                        Bit r = new Bit(bitValues.get(i), dataDeps.get(i), DependencySetLattice.get().bot());
+                        Bit r = bl.create(bitValues.get(i), dataDeps.get(i), DependencySetLattice.get().bot());
                         bits.add(r);
                         c.repl(r, computeModsCreator(i + 1, r, x, y, bitValues, dataDeps.get(i)));
                     }
@@ -559,7 +475,7 @@ public interface Operator {
 
                 Mods assumeOnePart(Context c, Bit alpha, Bit beta){
                     if (beta.isConstant()){
-                        return c.repl(alpha, new Bit(v(beta).neg()));
+                        return c.repl(alpha, bl.create(v(beta).neg()));
                     }
                     return Mods.empty();
                 }
@@ -580,16 +496,16 @@ public interface Operator {
             return x.stream().map(b -> {
                 B val = v(b).neg();
                 DependencySet dataDeps = b.isConstant() ? ds.bot() : new DependencySet(b);
-                Bit r = new Bit(val, dataDeps, ds.bot());
+                Bit r = bl.create(val, dataDeps, ds.bot());
                 c.repl(r, new StructuredModsCreator() {
                     @Override
                     public Mods assumeOne(Context c, Bit r, Bit a) {
-                        return c.repl(b, new Bit(ZERO));
+                        return c.repl(b, bl.create(ZERO));
                     }
 
                     @Override
                     public Mods assumeZero(Context c, Bit r, Bit a) {
-                        return c.repl(b, new Bit(ONE));
+                        return c.repl(b, bl.create(ONE));
                     }
 
                     @Override
@@ -776,10 +692,10 @@ public interface Operator {
                 @Override
                 public Mods assumeOne(Context c, Bit r, Bit a) { // x < y
                     if (y.isNonNegative()){ // x < y && 0 <= y => x is upper bounded by y
-                        return indexesWithBitValue(y, ZERO).mapToObj(x::get).map(xi -> c.repl(xi, new Bit(ZERO))).collect(Mods.collector());
+                        return indexesWithBitValue(y, ZERO).mapToObj(x::get).map(xi -> c.repl(xi, bl.create(ZERO))).collect(Mods.collector());
                     }
                     if (y.isNegative()){ // x < y < 0 => x is negative too
-                        return c.repl(x.signBit(), new Bit(ONE));
+                        return c.repl(x.signBit(), bl.create(ONE));
                     }
                     return Mods.empty();
                 }
@@ -787,10 +703,10 @@ public interface Operator {
                 @Override
                 public Mods assumeZero(Context c, Bit r, Bit a) { // x >= y
                     if (x.isNonNegative()){ // y <= x && 0 <= x => y is upper bounded by x
-                        return indexesWithBitValue(y, ZERO).mapToObj(y::get).map(yi -> c.repl(yi, new Bit(ZERO))).collect(Mods.collector());
+                        return indexesWithBitValue(y, ZERO).mapToObj(y::get).map(yi -> c.repl(yi, bl.create(ZERO))).collect(Mods.collector());
                     }
                     if (x.isNegative()){ // y <= x < 0 => y is negative too
-                        return c.repl(y.signBit(), new Bit(ONE));
+                        return c.repl(y.signBit(), bl.create(ONE));
                     }
                     return Mods.empty();
                 }
@@ -918,8 +834,7 @@ public interface Operator {
 
         @Override
         Value compute(Context c, Value argument) {
-            Bit newBit = new Bit(argument.get(1).val, argument.get(1).isUnknown() ? ds.create(argument.get(1)) : ds.bot(), ds.bot());
-            return IntStream.range(1, index + 2).mapToObj(i -> i == index ? newBit : new Bit(ZERO)).collect(Value.collector());
+            return IntStream.range(1, index + 2).mapToObj(i -> i == index ? argument.get(1) : bl.create(ZERO)).collect(Value.collector());
         }
     }
 
@@ -934,8 +849,7 @@ public interface Operator {
 
         @Override
         Value compute(Context c, Value argument) {
-            Bit selectedBit = argument.extend(index).get(index);
-            return new Value(new Bit(selectedBit.val, selectedBit.isUnknown() ? ds.create(selectedBit) : ds.bot(), ds.bot()));
+            return new Value(argument.extend(index).get(index));
         }
     }
 

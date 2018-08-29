@@ -88,12 +88,12 @@ public class Processor {
                     context.weight(condBit, Context.INFTY);
                 }
                 if (condVal == ONE || condVal == U) {
-                    conditionalBits.put(ifStatement.ifBlock, new Pair<>(condBit, new Bit(ONE)));
+                    conditionalBits.put(ifStatement.ifBlock, new Pair<>(condBit, bl.create(ONE)));
                 } else {
                     statementNodesToOmitOneTime.add(ifStatement.ifBlock);
                 }
                 if (condVal == ZERO || condVal == U) {
-                    conditionalBits.put(ifStatement.elseBlock, new Pair<>(condBit, new Bit(ZERO)));
+                    conditionalBits.put(ifStatement.elseBlock, new Pair<>(condBit, bl.create(ZERO)));
                 } else {
                     statementNodesToOmitOneTime.add(ifStatement.elseBlock);
                 }
@@ -126,7 +126,7 @@ public class Processor {
                     context.weight(condBit, Context.INFTY);
                 }
                 if (condVal == ONE || condVal == U) {
-                    conditionalBits.put(whileStatement.body, new Pair<>(condBit, new Bit(ONE)));
+                    conditionalBits.put(whileStatement.body, new Pair<>(condBit, bl.create(ONE)));
                     unfinishedLoopIterations++;
                 } else {
                     statementNodesToOmitOneTime.add(whileStatement.body);
