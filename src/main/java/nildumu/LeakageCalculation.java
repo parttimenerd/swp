@@ -73,7 +73,7 @@ public class LeakageCalculation {
                                     }
                                     processedBits.add(b);
                                 },
-                                processedBits::contains);
+                                processedBits::contains, new HashSet<>());
             }
             return new DependencyStorage(context, bitsPerSec, secsPerBit);
         }
@@ -328,7 +328,7 @@ public class LeakageCalculation {
         public final DirectedGraph<EdgeGraph.Node, EdgeGraph.Edge> graph;
         private final DefaultMap<Sec<?>, EdmondsKarpMaxFlow<EdgeGraph.Node, EdgeGraph.Edge>> karps;
 
-        private JungEdgeGraph(Rules rules, EdgeGraph edgeGraph) {
+        public JungEdgeGraph(Rules rules, EdgeGraph edgeGraph) {
             super(rules);
             this.edgeGraph = edgeGraph;
             graph = new DirectedSparseGraph<>();
@@ -499,7 +499,7 @@ public class LeakageCalculation {
         Map<Bit, Rule> rules = new HashMap<>();
         context.walkBits(b -> {
             if (!context.isInputBit(b)) {
-                rules.put(b, new Rule(b, rule(b), false));
+                rules.put(b, new Rule(b, rule(b), context.hasInfiniteWeight(b)));
             }
         }, b -> !b.isUnknown());
         Map<Bit, Set<Bit>> inputBitRules = new DefaultMap<>(new HashMap<>(),new DefaultMap.Extension<Bit, Set<Bit>>(){
@@ -540,7 +540,7 @@ public class LeakageCalculation {
         return new Rules(inputAnchorBits, outputAnchorBits, rules);
     }
 
-    private static Bit bit(String description) {
+    static Bit bit(String description) {
         Bit bit = bl.forceCreate(X);
         Value value = new Value(bit, bit).description(description);
         return bit;

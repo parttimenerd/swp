@@ -21,7 +21,8 @@ public class Processor {
 
     public static Context process(String program, Context.Mode mode, MethodInvocationHandler handler){
         ProgramNode node = Parser.process(program);
-        return process(node.context.mode(mode).methodInvocationHandler(handler), node);
+        handler.setup(node);
+        return process(node.context.mode(mode).forceMethodInvocationHandler(handler), node);
     }
 
     public static Context process(Context context, MJNode node) {

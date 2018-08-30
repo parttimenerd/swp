@@ -71,6 +71,9 @@ public class Context {
     }
 
     public static final Logger LOG = Logger.getLogger("Analysis", Context.class);
+    static {
+        LOG.setLevel(Level.FINEST);
+    }
 
     public final SecurityLattice<?> sl;
 
@@ -311,7 +314,7 @@ public class Context {
                     if (o != m) {
                         m.version(o.version() + 1);
                         log(() -> String.format("%20s → %s\n", o.repr(), m.repr()));
-                        if (m.version() > 5){
+                        if (m.version() > 100){
                             throw new RuntimeException();
                         }
                         Set<Bit> set = new HashSet<>(bitVersions(o));
@@ -620,6 +623,11 @@ public class Context {
 
     /*-------------------------- methods -------------------------------*/
 
+    public Context forceMethodInvocationHandler(MethodInvocationHandler handler) {
+        methodInvocationHandler = handler;
+        return this;
+    }
+
     public Context methodInvocationHandler(MethodInvocationHandler handler) {
         assert methodInvocationHandler == null;
         methodInvocationHandler = handler;
@@ -627,6 +635,9 @@ public class Context {
     }
 
     public MethodInvocationHandler methodInvocationHandler(){
-        return methodInvocationHandler == null ? MethodInvocationHandler.createDefault() : methodInvocationHandler;
+        if (methodInvocationHandler == null){
+            methodInvocationHandler(MethodInvocationHandler.createDefault());
+        }
+        return methodInvocationHandler;
     }
 }

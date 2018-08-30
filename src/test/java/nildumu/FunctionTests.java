@@ -2,10 +2,12 @@ package nildumu;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.*;
-import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.*;
+
+import java.lang.reflect.Method;
 
 import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 import static nildumu.Processor.process;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
@@ -34,12 +36,17 @@ public class FunctionTests {
         parse(program).hasValue("x", expectedValue);
     }
 
-    @Test
-    public void testTrivialRecursionTerminates(){
-        assertTimeoutPreemptively(ofMillis(100), () -> parse("int bla(){ return bla() }"));
+    @ParameterizedTest
+    @MethodSource("nildumu.MethodInvocationHandler#getExamplePropLines")
+    public void testTrivialRecursionTerminates(String handler){
+        assertTimeoutPreemptively(ofSeconds(100), () -> parse("int bla(){ return bla() }", MethodInvocationHandler.parse(handler)));
     }
 
     ContextMatcher parse(String program){
-        return new ContextMatcher(process(program, Context.Mode.LOOP));
+        return parse(program, MethodInvocationHandler.createDefault());
+    }
+
+    ContextMatcher parse(String program, MethodInvocationHandler handler){
+        return new ContextMatcher(process(program, Context.Mode.LOOP, handler));
     }
 }

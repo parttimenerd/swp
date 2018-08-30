@@ -120,14 +120,25 @@ public class LoopTests {
                 "l output int o = h;"));
     }
 
+    /**
+     <code>
+     bit_width 2;
+     h input int h = 0buu;
+     l input int l = 0bu;
+     while (l){
+        h = [2](h[2] | h[1]);
+     }
+     l output int o = h;
+     </code>
+     */
     @Test
     public void testBasicLoop4_condensed2(){
         assertTimeoutPreemptively(ofMillis(1000000), () ->
                 parse("bit_width 2;\n" +
-                        "h input int h = 0b0u;\n" +
+                        "h input int h = 0buu;\n" +
                         "l input int l = 0bu;\n" +
                         "while (l){\n" +
-                        "  h = [2](h[1]);\n" +
+                        "  h = [2](h[2] | h[1]);\n" +
                         "}\n" +
                         "l output int o = h;"));
     }

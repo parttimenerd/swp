@@ -607,6 +607,10 @@ public class Lattices {
             assert size() == 1;
             return iterator().next();
         }
+
+        public DependencySet map(Function<Bit, Bit> mapper){
+            return stream().map(mapper).collect(DependencySet.collector());
+        }
     }
 
     public static class DependencySetLattice extends SetLattice<Bit, DependencySet> {
@@ -706,11 +710,31 @@ public class Lattices {
             return BIT_LATTICE;
         }
 
-        public void walkTopologicalOrder(Bit startBit, Consumer<Bit> consumer, Predicate<Bit> ignoreBit){
+        public void walkTopologicalOrder(Bit startBit, Consumer<Bit> consumer, Predicate<Bit> ignoreBit, Set<Bit> alreadyVisitedBits){
             List<Bit> bits = new ArrayList<>();
-            walkBits(startBit, bits::add, ignoreBit);
+            walkBits(startBit, bits::add, ignoreBit, new AbstractSet<Bit>() {
+                @Override
+                public Iterator<Bit> iterator() {
+                    return Collections.emptyIterator();
+                }
+
+                @Override
+                public int size() {
+                    return 0;
+                }
+
+                @Override
+                public boolean add(Bit bit) {
+                    return false;
+                }
+            });
             for (int i = bits.size() - 1; i >= 0; i--){
-                consumer.accept(bits.get(i));
+                Bit bit = bits.get(i);
+                if (alreadyVisitedBits.contains(bit)){
+                    continue;
+                }
+                alreadyVisitedBits.add(bit);
+                consumer.accept(bit);
             }
         }
 
@@ -911,6 +935,10 @@ public class Lattices {
         public static void resetNumberOfCreatedBits(){
             NUMBER_OF_BITS = 0;
         }
+
+        public String uniqueId(){
+            return bitNo + "";
+        }
     }
 
     public static class ValueLattice implements Lattice<Value> {
@@ -1012,6 +1040,19 @@ public class Lattices {
 
         public String toString(Value elem) {
             return elem.toString();
+        }
+
+        public void walkTopological(Value start, Consumer<Value> consumer){
+            Set<Bit> alreadyVisitedBits = new HashSet<>();
+            for (Bit bit : start) {
+                bl.walkTopologicalOrder(bit, b -> {
+                    Value value = b.value;
+                    if (value != null){
+                        alreadyVisitedBits.addAll(value.bits);
+                        consumer.accept(value);
+                    }
+                }, s -> false, alreadyVisitedBits);
+            }
         }
     }
 
@@ -1198,6 +1239,10 @@ public class Lattices {
 
         public boolean isNonNegative(){
             return signBit().val == ZERO;
+        }
+
+        public Value map(Function<Bit, Bit> mapper){
+            return stream().map(mapper).collect(Value.collector());
         }
     }
 

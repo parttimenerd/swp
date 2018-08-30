@@ -918,6 +918,10 @@ public class Parser implements Serializable {
         public String toPrettyString(String indent, String incr) {
             return globalBlock.toPrettyString(indent, incr);
         }
+
+        public Collection<MethodNode> methods(){
+            return methods.values();
+        }
     }
 
     /**
