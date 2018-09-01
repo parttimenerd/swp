@@ -1,11 +1,12 @@
 package nildumu;
 
 import org.junit.jupiter.api.*;
-
-import java.time.Duration;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static java.time.Duration.ofMillis;
 import static nildumu.Processor.process;
+import static nildumu.Util.iter;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 public class LoopTests {
@@ -17,7 +18,7 @@ public class LoopTests {
     @Test
     public void testBasic(){
         parse("h input int h = 0b0u;\n" +
-                "l output int o = h;").leakage(l -> l.hasLeakage("l", 1));
+                "l output int o = h;").leakage(l -> l.leaks("l", 1));
     }
 
     /**
@@ -37,7 +38,7 @@ public class LoopTests {
                 "while (h == 0){\n" +
                 "\tx = x + 1;\n" +
                 "}\n" +
-                "l output int o = x;").leakage(l -> l.hasLeakage("l", 1));
+                "l output int o = x;").leakage(l -> l.leaks("l", 1));
     }
 
     @Test
@@ -56,7 +57,7 @@ public class LoopTests {
                 "while (h){\n" +
                 "\th = h;\n" +
                 "}\n" +
-                "l output int o = h").leakage(l -> l.hasLeakage("l", 1));
+                "l output int o = h").leaks(1);
     }
 
     /**
@@ -99,13 +100,13 @@ public class LoopTests {
 
     /**
      * <code>
-     *     bit_width 2;
-     *     h input int h = 0b0u;
-     *     l input int l = 0bu;
-     *     while (l){
-     *         h = [2](h[2] | h[1]);
-     *     }
-     *     l output int o = h;
+          bit_width 2;
+          h input int h = 0b0u;
+          l input int l = 0bu;
+          while (l){
+              h = [2](h[2] | h[1]);
+          }
+          l output int o = h;
      * </code>
      */
     @Test
@@ -117,7 +118,7 @@ public class LoopTests {
                 "while (l){\n" +
                 "  h = [2](h[2] | h[1]);\n" +
                 "}\n" +
-                "l output int o = h;"));
+                "l output int o = h;").leaks(1));
     }
 
     /**
@@ -131,16 +132,44 @@ public class LoopTests {
      l output int o = h;
      </code>
      */
-    @Test
-    public void testBasicLoop4_condensed2(){
+    @ParameterizedTest
+    @ValueSource(ints = {1,2, 10, 100})
+    public void testBasicLoop4_condensed2(int secretSize){
         assertTimeoutPreemptively(ofMillis(1000000), () ->
                 parse("bit_width 2;\n" +
-                        "h input int h = 0buu;\n" +
+                        String.format("h input int h = 0b%s;\n", iter("u", secretSize)) +
                         "l input int l = 0bu;\n" +
                         "while (l){\n" +
                         "  h = [2](h[2] | h[1]);\n" +
                         "}\n" +
-                        "l output int o = h;"));
+                        "l output int o = h;").leaks(secretSize));
+    }
+
+    /**
+     * <code>
+     bit_width 2;
+     h input int h = 0b0u;
+     l input int l = 0bu;
+     while (l){
+        while (l){
+            h = [2](h[2] | h[1]);
+        }
+     }
+     l output int o = h;
+     * </code>
+     */
+    @Test
+    public void testBasicLoopNested(){
+        assertTimeoutPreemptively(ofMillis(1000000), () ->
+                parse("     bit_width 2;\n" +
+                        "     h input int h = 0b0u;\n" +
+                        "     l input int l = 0bu;\n" +
+                        "     while (l){\n" +
+                        "        while (l){\n" +
+                        "            h = [2](h[2] | h[1]);\n" +
+                        "        }\n" +
+                        "     }\n" +
+                        "     l output int o = h;").leaks(1));
     }
 
     ContextMatcher parse(String program){

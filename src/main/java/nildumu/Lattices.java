@@ -638,8 +638,6 @@ public class Lattices {
 
         private final static BitLattice BIT_LATTICE = new BitLattice();
 
-        private final static DefaultMap<B, Bit> constBits = new DefaultMap<B, Bit>((bBitMap, b) -> new Bit(b));
-
         Bit bot;
 
         public BitLattice() {
@@ -665,9 +663,6 @@ public class Lattices {
         }
 
         public Bit create(B val){
-            if (val != U){
-                return constBits.get(val);
-            }
             return new Bit(val);
         }
 
@@ -806,12 +801,10 @@ public class Lattices {
 
         private static long NUMBER_OF_BITS = 0;
 
-        static final Bit ONE = new Bit(B.ONE);
-        static final Bit ZERO = new Bit(B.ZERO);
-        final B val;
-        final DependencySet dataDeps;
-        final DependencySet controlDeps;
-        final DependencySet deps;
+        B val;
+        DependencySet dataDeps;
+        DependencySet controlDeps;
+        DependencySet deps;
         /**
          * Like the identity in the thesis
          */
@@ -938,6 +931,17 @@ public class Lattices {
 
         public String uniqueId(){
             return bitNo + "";
+        }
+
+        public void setDeps(DependencySet dataDeps, DependencySet controlDeps){
+            this.dataDeps = dataDeps;
+            this.controlDeps = controlDeps;
+            this.deps = ds.sup(dataDeps, controlDeps);
+        }
+
+        public void setVal(B newVal){
+            assert bs.greaterEqualsThan(newVal, val);
+            this.val = newVal;
         }
     }
 

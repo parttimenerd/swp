@@ -3,6 +3,7 @@ package nildumu;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static nildumu.Lattices.bs;
 import static nildumu.Lattices.vl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,19 +16,19 @@ public class ContextMatcher {
         this.context = context;
     }
 
-    public ContextMatcher hasValue(String variable, int value){
+    public ContextMatcher val(String variable, int value){
         Lattices.Value actual = getValue(variable);
-        assertTrue(actual.isConstant(), String.format("Variable %s should have an integer value, has %s", variable, actual.repr()));
+        assertTrue(actual.isConstant(), String.format("Variable %s should have an integer val, has %s", variable, actual.repr()));
         assertEquals(value, actual.asInt(),
-                String.format("Variable %s should have integer value %d", variable, value));
+                String.format("Variable %s should have integer val %d", variable, value));
         return this;
     }
 
-    public ContextMatcher hasValue(String variable, String value){
+    public ContextMatcher val(String variable, String value){
         Lattices.Value expected = vl.parse(value);
         Lattices.Value actual = getValue(variable);
         assertEquals(expected.toLiteralString(), actual.toLiteralString(),
-                String.format("Variable %s should have value %s, has value %s", variable, expected.repr(), actual.repr()));
+                String.format("Variable %s should have val %s, has val %s", variable, expected.repr(), actual.repr()));
         return this;
     }
 
@@ -37,7 +38,7 @@ public class ContextMatcher {
 
     public ContextMatcher hasInput(String variable){
         assertTrue(context.isInputValue(getValue(variable)),
-                String.format("The value of %s is an input value", variable));
+                String.format("The val of %s is an input val", variable));
         return this;
     }
 
@@ -48,7 +49,7 @@ public class ContextMatcher {
 
     public ContextMatcher hasOutput(String variable){
         assertTrue(context.output.contains(getValue(variable)),
-                String.format("The value of %s is an output value", variable));
+                String.format("The val of %s is an output val", variable));
         return this;
     }
 
@@ -69,7 +70,7 @@ public class ContextMatcher {
             this.graph = graph;
         }
 
-        public LeakageMatcher hasLeakage(Lattices.Sec<?> attackerSec, int leakage){
+        public LeakageMatcher leaks(Lattices.Sec<?> attackerSec, int leakage){
             assertEquals(leakage, graph.leakage(attackerSec), () -> {
 
                /* try {
@@ -83,14 +84,34 @@ public class ContextMatcher {
             return this;
         }
 
-        public LeakageMatcher hasLeakage(String attackerSec, int leakage){
-            return hasLeakage(context.sl.parse(attackerSec), leakage);
+        public LeakageMatcher leaks(String attackerSec, int leakage){
+            return leaks(context.sl.parse(attackerSec), leakage);
         }
     }
 
-    public ContextMatcher value(String var, Consumer<ValueMatcher> test){
+    public ContextMatcher val(String var, Consumer<ValueMatcher> test){
         test.accept(new ValueMatcher(context.getVariableValue(var)));
         return this;
+    }
+
+    public ContextMatcher leaks(String attackerSec, int leakage){
+        return leakage(l -> l.leaks(attackerSec, leakage));
+    }
+
+    public ContextMatcher leaks(int leakage){
+        return leakage(l -> l.leaks(context.sl.bot(), leakage));
+    }
+
+    /**
+     *
+     * @param varAndIndex "var[1]"
+     * @param val
+     * @return
+     */
+    public ContextMatcher bit(String varAndIndex, String val){
+        String var = varAndIndex.split("\\[")[0];
+        int i = Integer.parseInt(varAndIndex.split("\\[")[0].split("\\]")[0]);
+        return val(var, vm -> vm.bit(i, bs.parse(val)));
     }
 
     public static class ValueMatcher {
@@ -101,7 +122,7 @@ public class ContextMatcher {
         }
 
         public ValueMatcher bit(int i, Lattices.B val){
-            assertEquals(val, value.get(i).val, String.format("The %dth bit of %s should have the bit value %s", i, value, val));
+            assertEquals(val, value.get(i).val, String.format("The %dth bit of %s should have the bit val %s", i, value, val));
             return this;
         }
     }

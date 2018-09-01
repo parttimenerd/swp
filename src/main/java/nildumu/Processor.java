@@ -21,8 +21,9 @@ public class Processor {
 
     public static Context process(String program, Context.Mode mode, MethodInvocationHandler handler){
         ProgramNode node = Parser.process(program);
+        node.context.mode(mode);
         handler.setup(node);
-        return process(node.context.mode(mode).forceMethodInvocationHandler(handler), node);
+        return process(node.context.forceMethodInvocationHandler(handler), node);
     }
 
     public static Context process(Context context, MJNode node) {
@@ -106,12 +107,12 @@ public class Processor {
                 if (conditionalBits.containsKey(block)){
                     Pair<Bit, Bit> bitPair = conditionalBits.get(block);
                     context.pushMods(bitPair.first, bitPair.second);
-                    nodeValueUpdatesAtCondition.push(context.getNodeValueUpdateCount());
+                    nodeValueUpdatesAtCondition.push(context.getNodeVersionUpdateCount());
                 }
-                if (lastUpdateCounts.get(block) == context.getNodeValueUpdateCount()) {
+                if (lastUpdateCounts.get(block) == context.getNodeVersionUpdateCount()) {
                     return false;
                 }
-                lastUpdateCounts.put(block, context.getNodeValueUpdateCount());
+                lastUpdateCounts.put(block, context.getNodeVersionUpdateCount());
                 return true;
             }
 
@@ -133,7 +134,7 @@ public class Processor {
                     statementNodesToOmitOneTime.add(whileStatement.body);
                 }
                 if (didValueChangeAndUpdate(whileStatement, cond)) {
-                    nodeValueUpdatesAtCondition.push(context.getNodeValueUpdateCount());
+                    nodeValueUpdatesAtCondition.push(context.getNodeVersionUpdateCount());
                     return true;
                 }
                 return false;
@@ -142,14 +143,14 @@ public class Processor {
             @Override
             public Boolean visit(IfStatementEndNode ifEndStatement) {
                 context.popMods();
-                return nodeValueUpdatesAtCondition.pop() != context.getNodeValueUpdateCount();
+                return nodeValueUpdatesAtCondition.pop() != context.getNodeVersionUpdateCount();
             }
 
             @Override
             public Boolean visit(WhileStatementEndNode whileEndStatement) {
                 unfinishedLoopIterations--;
                 context.popMods();
-                return nodeValueUpdatesAtCondition.pop() != context.getNodeValueUpdateCount();
+                return nodeValueUpdatesAtCondition.pop() != context.getNodeVersionUpdateCount();
             }
 
             @Override

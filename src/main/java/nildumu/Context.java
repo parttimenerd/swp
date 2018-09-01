@@ -2,8 +2,6 @@ package nildumu;
 
 import com.sun.istack.internal.logging.Logger;
 
-import sun.rmi.runtime.Log;
-
 import java.util.*;
 import java.util.function.*;
 import java.util.logging.Level;
@@ -83,7 +81,7 @@ public class Context {
 
     public final IOValues output = new IOValues();
 
-    public final Stack<State> variableStates = new Stack<>();
+    private final Stack<State> variableStates = new Stack<>();
 
     private final DefaultMap<Bit, Sec<?>> secMap =
             new DefaultMap<>(
@@ -92,17 +90,6 @@ public class Context {
                         @Override
                         public Sec<?> defaultValue(Map<Bit, Sec<?>> map, Bit key) {
                             return sl.bot();
-                        }
-                    },
-                    FORBID_DELETIONS,
-                    FORBID_VALUE_UPDATES);
-    private final DefaultMap<Bit, Bit> originMap =
-            new DefaultMap<>(
-                    new IdentityHashMap<>(),
-                    new DefaultMap.Extension<Bit, Bit>() {
-                        @Override
-                        public Bit defaultValue(Map<Bit, Bit> map, Bit key) {
-                            return key;
                         }
                     },
                     FORBID_DELETIONS,
@@ -120,22 +107,93 @@ public class Context {
         }
     }, FORBID_DELETIONS, FORBID_VALUE_UPDATES);
 
-    private long nodeValueUpdateCount = 0;
+    public static class CallPath {
+        final List<MethodInvocationNode> path;
 
-    private final DefaultMap<MJNode, Value> nodeValueMap = new DefaultMap<>(new LinkedHashMap<>(), new DefaultMap.Extension<MJNode, Value>() {
+        CallPath(){
+            this(Collections.emptyList());
+        }
+
+        CallPath(List<MethodInvocationNode> path) {
+            this.path = path;
+        }
+
+        public CallPath push(MethodInvocationNode callSite){
+            List<MethodInvocationNode> newPath = new ArrayList<>(path);
+            newPath.add(callSite);
+            return new CallPath(newPath);
+        }
+
+        public CallPath pop(){
+            List<MethodInvocationNode> newPath = new ArrayList<>(path);
+            newPath.remove(newPath.size() - 1);
+            return new CallPath(newPath);
+        }
 
         @Override
-        public void handleValueUpdate(DefaultMap<MJNode, Value> map, MJNode key, Value value) {
-            if (vl.mapBits(map.get(key), value, (a, b) -> a != b).stream().anyMatch(p -> p)){
-                nodeValueUpdateCount++;
+        public int hashCode() {
+            return path.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return obj instanceof CallPath && ((CallPath) obj).path.equals(path);
+        }
+
+        @Override
+        public String toString() {
+            return path.stream().map(Object::toString).collect(Collectors.joining(" → "));
+        }
+    }
+
+    public static class NodeValueState {
+
+        long nodeValueUpdateCount = 0;
+
+        final DefaultMap<MJNode, Value> nodeValueMap = new DefaultMap<>(new LinkedHashMap<>(), new DefaultMap.Extension<MJNode, Value>() {
+
+            @Override
+            public void handleValueUpdate(DefaultMap<MJNode, Value> map, MJNode key, Value value) {
+                if (vl.mapBits(map.get(key), value, (a, b) -> a != b).stream().anyMatch(p -> p)){
+                    nodeValueUpdateCount++;
+                }
             }
-        }
 
-        @Override
-        public Value defaultValue(Map<MJNode, Value> map, MJNode key) {
-            return ValueLattice.get().bot();
+            @Override
+            public Value defaultValue(Map<MJNode, Value> map, MJNode key) {
+                return ValueLattice.get().bot();
+            }
+        }, FORBID_DELETIONS);
+
+        long nodeVersionUpdateCount = 0;
+
+        final DefaultMap<MJNode, Integer> nodeVersionMap = new DefaultMap<>(new LinkedHashMap<>(), new DefaultMap.Extension<MJNode, Integer>() {
+
+            @Override
+            public void handleValueUpdate(DefaultMap<MJNode, Integer> map, MJNode key, Integer value) {
+                if (map.get(key) != value){
+                    nodeVersionUpdateCount++;
+                }
+            }
+
+            @Override
+            public Integer defaultValue(Map<MJNode, Integer> map, MJNode key) {
+                return 0;
+            }
+        }, FORBID_DELETIONS);
+
+        final CallPath path;
+
+        public NodeValueState(CallPath path) {
+            this.path = path;
         }
-    }, FORBID_DELETIONS);
+    }
+
+    private final DefaultMap<CallPath, NodeValueState> nodeValueStates = new DefaultMap<>((map, path) -> new NodeValueState(path));
+
+    private CallPath currentCallPath = new CallPath();
+
+    private NodeValueState nodeValueState = nodeValueStates.get(currentCallPath);
 
     private final DefaultMap<Bit, Integer> c1LeakageMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, Integer>() {
         @Override
@@ -276,11 +334,11 @@ public class Context {
         } else if (node instanceof WrapperNode){
             return ((WrapperNode<Value>) node).wrapped;
         }
-        return nodeValueMap.get(node);
+        return nodeValueState.nodeValueMap.get(node);
     }
 
     public Value nodeValue(MJNode node, Value value){
-        return nodeValueMap.put(node, value);
+        return nodeValueState.nodeValueMap.put(node, value);
     }
 
     Operator operatorForNode(MJNode node){
@@ -301,36 +359,54 @@ public class Context {
         }).collect(Collectors.toList());
     }
 
-    public Value evaluate(MJNode node){
+    final Map<MJNode, List<Integer>> lastParamVersions = new HashMap<>();
+
+    private boolean compareAndStoreParamVersion(MJNode node){
+        List<Integer> curVersions = paramNode(node).stream().map(nodeValueState.nodeVersionMap::get).collect(Collectors.toList());
+        boolean somethingChanged = true;
+        if (lastParamVersions.containsKey(node)){
+            somethingChanged = lastParamVersions.get(node).equals(curVersions);
+        }
+        lastParamVersions.put(node, curVersions);
+        return somethingChanged;
+    }
+
+    public boolean evaluate(MJNode node){
         log(() -> "Evaluate node " + node + " " + nodeValue(node).get(1).deps.size());
-        List<Value> args = paramNode(node).stream().map(this::nodeValue).map(this::replace).collect(Collectors.toList());
+
+        boolean paramsChanged = compareAndStoreParamVersion(node);
+        if (!paramsChanged){
+            return false;
+        }
+
+        List<MJNode> paramNodes = paramNode(node);
+
+        List<Value> args = paramNodes.stream().map(this::nodeValue).map(this::replace).collect(Collectors.toList());
         Value newValue = op(node, args);
+        boolean somethingChanged = false;
         if (inLoopMode() && nodeValue(node) != vl.bot()) { // dismiss first iteration
             Value oldValue = nodeValue(node);
-            Value mergedValue = vl.mapBitsToValue(oldValue, newValue, this::merge);
-            if (!oldValue.valueEquals(mergedValue)){
-                log(() -> String.format("Update value for %s", node));
-                vl.mapBits(oldValue, mergedValue, (o, m) -> {
-                    if (o != m) {
-                        m.version(o.version() + 1);
-                        log(() -> String.format("%20s → %s\n", o.repr(), m.repr()));
-                        if (m.version() > 100){
-                            throw new RuntimeException();
-                        }
-                        Set<Bit> set = new HashSet<>(bitVersions(o));
-                        set.add(m);
-                        bitVersions(m, set);
-                    }
-                    return null;
-                });
+            List<Bit> newBits = new ArrayList<>();
+            somethingChanged = vl.mapBits(oldValue, newValue, (a, b) -> {
+                boolean changed = false;
+                if (a.value() == null){
+                    a.value(oldValue); // newly created bit
+                    changed = true;
+                    newBits.add(a);
+                }
+                return merge(a, b) || changed;
+            }).stream().anyMatch(p -> p);
+            if (newBits.size() > 0){
+                newValue = Stream.concat(oldValue.stream(), newBits.stream()).collect(Value.collector());
             } else {
-                log(() -> String.format("Update no value for %s", node));
+                newValue = oldValue;
             }
-            newValue = mergedValue;
+        } else {
+            somethingChanged = nodeValue(node) == vl.bot();
         }
         nodeValue(node, newValue);
         newValue.description(node.getTextualId()).node(node);
-        return newValue;
+        return somethingChanged;
     }
 
     /**
@@ -418,7 +494,7 @@ public class Context {
     }
 
     public Set<MJNode> nodes(){
-        return nodeValueMap.keySet();
+        return nodeValueState.nodeValueMap.keySet();
     }
 
     public List<String> variableNames(){
@@ -561,20 +637,28 @@ public class Context {
         return ds.create(controlDeps);
     }
 
-    public Bit merge(Bit o, Bit n){
+    /**
+     * merges n into m
+     * @param o
+     * @param n
+     * @return true if o value equals the merge result
+     */
+    public boolean merge(Bit o, Bit n){
+
         B vt = bs.sup(v(o), v(n));
         DependencySet dt = ds.sup(d(o), d(n));
-        DependencySet ct = ds.sup(c(o), gatherControlDependencies(n));
-        Bit m = bl.create(vt, dt, ct);
-        if (sim(o, m)){
-            return o;
+        DependencySet ct = ds.sup(c(o), c(n));
+        if (dt.equals(d(o)) && ct.equals(c(o)) && vt == v(o)){
+            return false;
         }
-        repl(m, (c, b, a) -> {
+        o.setVal(vt);
+        o.setDeps(dt, ct);
+        repl(o, (c, b, a) -> {
             Mods oMods = repl(o).apply(c, b, a);
             Mods nMods = repl(n).apply(c, b, a);
             return Mods.empty().add(oMods).overwrite(nMods);
         });
-        return m;
+        return true;
     }
 
     DependencySet directDependencies(Bit bit){
@@ -610,7 +694,7 @@ public class Context {
     }
 
     public long getNodeValueUpdateCount(){
-        return nodeValueUpdateCount;
+        return nodeValueState.nodeValueUpdateCount;
     }
 
     public void setReturnValue(Value value){
@@ -619,6 +703,10 @@ public class Context {
 
     public Value getReturnValue(){
         return variableStates.get(variableStates.size() - 1).getReturnValue();
+    }
+
+    public long getNodeVersionUpdateCount(){
+        return nodeValueState.nodeVersionUpdateCount;
     }
 
     /*-------------------------- methods -------------------------------*/
@@ -639,5 +727,21 @@ public class Context {
             methodInvocationHandler(MethodInvocationHandler.createDefault());
         }
         return methodInvocationHandler;
+    }
+
+    public void pushNewMethodInvocationState(MethodInvocationNode callSite){
+        currentCallPath = currentCallPath.push(callSite);
+        variableStates.push(new State());
+        nodeValueState = nodeValueStates.get(currentCallPath);
+    }
+
+    public void popMethodInvocationState(){
+        currentCallPath = currentCallPath.pop();
+        variableStates.pop();
+        nodeValueState = nodeValueStates.get(currentCallPath);
+    }
+
+    public CallPath callPath(){
+        return currentCallPath;
     }
 }

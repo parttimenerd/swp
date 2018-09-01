@@ -855,24 +855,24 @@ public interface Operator {
 
     public static class MethodInvocation implements Operator {
 
-        final Parser.MethodNode method;
+        final Parser.MethodInvocationNode callSite;
 
-        public MethodInvocation(Parser.MethodNode method) {
-            this.method = method;
+        public MethodInvocation(Parser.MethodInvocationNode callSite) {
+            this.callSite = callSite;
         }
 
         @Override
         public Value compute(Context c, List<Value> arguments) {
-            if (!method.hasReturnValue()){
-                System.err.println("Called method without return statement: " + method);
+            if (!callSite.definition.hasReturnValue()){
+                System.err.println("Called method without return statement: " + toString(arguments));
                 return vl.bot();
             }
-            return c.methodInvocationHandler().analyze(c, method, arguments);
+            return c.methodInvocationHandler().analyze(c, callSite, arguments);
         }
 
         @Override
         public String toString(List<Value> arguments) {
-            return String.format("%s(%s)", method.name, arguments.stream().map(Value::toString).collect(Collectors.joining(",")));
+            return String.format("%s(%s)", callSite.definition.name, arguments.stream().map(Value::toString).collect(Collectors.joining(",")));
         }
     }
 

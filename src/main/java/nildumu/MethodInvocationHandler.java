@@ -123,10 +123,12 @@ public abstract class MethodInvocationHandler {
         }
 
         @Override
-        public Value analyze(Context c, MethodNode method, List<Value> arguments) {
+        public Value analyze(Context c, MethodInvocationNode callSite, List<Value> arguments) {
+            MethodNode method = callSite.definition;
+            System.out.println(method.name + methodCallCounter.get(method));
             if (methodCallCounter.get(method) < maxRec) {
                 methodCallCounter.put(method, methodCallCounter.get(method) + 1);
-                c.variableStates.push(new State());
+                c.pushNewMethodInvocationState(callSite);
                 for (int i = 0; i < arguments.size(); i++) {
                     c.setVariableValue(method.parameters.get(i).definition, arguments.get(i));
                 }
@@ -134,16 +136,17 @@ public abstract class MethodInvocationHandler {
                 Value ret = c.getReturnValue();
                 DefaultMap<MJNode, MJNode> newNodes = new DefaultMap<MJNode, MJNode>(
                         (map, node) -> new WrapperNode<MJNode>(node.location, node));
-                vl.walkTopological(ret, v -> {
+                /*vl.walkTopological(ret, v -> {
                     if (v.node() != null){
                         v.node(newNodes.get(v.node()));
                     }
-                });
-                c.variableStates.pop();
+                });*/
+                c.popMethodInvocationState();
                 methodCallCounter.put(method, methodCallCounter.get(method) - 1);
+                System.out.println(method.name + methodCallCounter.get(method) + "ret");
                 return ret;
             }
-            return botHandler.analyze(c, method, arguments);
+            return botHandler.analyze(c, callSite, arguments);
         }
     }
 
@@ -272,7 +275,7 @@ public abstract class MethodInvocationHandler {
                 bl.walkBits(bit, b -> {
                     DotGraph.Node node = g.addNode(b.uniqueId());
                     node.setLabel(dotLabel.apply(b));
-                    b.deps.stream().forEach(d -> g.addAssociation(dotLabel.apply(b), dotLabel.apply(b)));
+                    b.deps.forEach(d -> g.addAssociation(dotLabel.apply(b), dotLabel.apply(b)));
                 }, b -> false, alreadyVisited);
             }
             g.addNode("return").setLabel("return");
@@ -319,17 +322,23 @@ public abstract class MethodInvocationHandler {
         @Override
         public void setup(ProgramNode program) {
             Context c = program.context;
+            Map<MethodNode, MethodInvocationNode> callSites = new DefaultMap<>((map, method) ->{
+                MethodInvocationNode callSite = new MethodInvocationNode(method.location, method.name, null);
+                callSite.definition = method;
+                return callSite;
+            });
             Map<MethodNode, BitGraph> curVersion = new HashMap<>();
             program.methods().forEach(m -> {
                 List<Value> parameters = generateParameters(program, m);
-                Value returnValue = botHandler.analyze(c, m, parameters);
+                Value returnValue = botHandler.analyze(c, callSites.get(m), parameters);
                 curVersion.put(m, new BitGraph(c, parameters, returnValue));
             });
             outputDots(curVersion, 0);
             MethodInvocationHandler handler = createHandler(curVersion);
             for (int i = 0; i < maxIterations; i++) {
                 for (MethodNode method : program.methods()) {
-                    curVersion.put(method, methodIteration(program.context, method, handler, curVersion.get(method).parameters));
+
+                    curVersion.put(method, methodIteration(program.context, callSites.get(method), handler, curVersion.get(method).parameters));
                 }
                 outputDots(curVersion, i + 1);
             }
@@ -348,23 +357,23 @@ public abstract class MethodInvocationHandler {
             ).collect(Collectors.toList());
         }
 
-        BitGraph methodIteration(Context c, MethodNode method, MethodInvocationHandler handler, List<Value> parameters){
-            c.variableStates.push(new State());
+        BitGraph methodIteration(Context c, MethodInvocationNode callSite, MethodInvocationHandler handler, List<Value> parameters){
+            c.pushNewMethodInvocationState(callSite);
             for (int i = 0; i < parameters.size(); i++) {
-                c.setVariableValue(method.parameters.get(i).definition, parameters.get(i));
+                c.setVariableValue(callSite.definition.parameters.get(i).definition, parameters.get(i));
             }
             c.forceMethodInvocationHandler(handler);
-            Processor.process(c, method.body);
+            Processor.process(c, callSite.definition.body);
             Value ret = c.getReturnValue();
-            c.variableStates.pop();
+            c.popMethodInvocationState();
             return new BitGraph(c, parameters, ret);
         }
 
         MethodInvocationHandler createHandler(Map<MethodNode, BitGraph> curVersions){
             return new MethodInvocationHandler() {
                 @Override
-                public Value analyze(Context c, MethodNode method, List<Value> arguments) {
-                    return curVersions.get(method).applyToArgs(c, arguments);
+                public Value analyze(Context c, MethodInvocationNode callSite, List<Value> arguments) {
+                    return curVersions.get(callSite.definition).applyToArgs(c, arguments);
                 }
             };
         }
@@ -383,8 +392,8 @@ public abstract class MethodInvocationHandler {
         }
 
         @Override
-        public Value analyze(Context c, MethodNode method, List<Value> arguments) {
-            return methodGraphs.get(method).applyToArgs(c, arguments);
+        public Value analyze(Context c, MethodInvocationNode callSite, List<Value> arguments) {
+            return methodGraphs.get(callSite.definition).applyToArgs(c, arguments);
         }
     }
 
@@ -426,8 +435,8 @@ public abstract class MethodInvocationHandler {
     static {
         register("basic", s -> {}, ps -> new MethodInvocationHandler(){
             @Override
-            public Value analyze(Context c, MethodNode method, List<Value> arguments) {
-                if (arguments.isEmpty() || method.hasReturnValue()){
+            public Value analyze(Context c, MethodInvocationNode callSite, List<Value> arguments) {
+                if (arguments.isEmpty() || !callSite.definition.hasReturnValue()){
                     return vl.bot();
                 }
                 DependencySet set = arguments.stream().flatMap(Value::stream).collect(DependencySet.collector());
@@ -462,5 +471,5 @@ public abstract class MethodInvocationHandler {
     public void setup(ProgramNode program){
     }
 
-    public abstract Lattices.Value analyze(Context c, MethodNode method, List<Value> arguments);
+    public abstract Lattices.Value analyze(Context c, MethodInvocationNode callSite, List<Value> arguments);
 }

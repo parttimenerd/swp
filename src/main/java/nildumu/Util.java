@@ -75,4 +75,11 @@ public class Util {
         return vals.stream().map(b -> b ? "1" : "0").collect(Collectors.joining(""));
     }
 
+    public static String iter(String str, int number){
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < number; i++) {
+            builder.append(str);
+        }
+        return builder.toString();
+    }
 }

@@ -11,6 +11,7 @@ import swp.util.Pair;
 
 import static nildumu.Lattices.BasicSecLattice.HIGH;
 import static nildumu.Lattices.BasicSecLattice.LOW;
+import static nildumu.Lattices.bl;
 import static nildumu.Util.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,7 +75,7 @@ public class LatticesTest {
         @Test
         public void testParsing(){
             assertParsingCorrect(Lattices.ValueLattice.get(), Lattices.Value::valueEquals,
-                    p("0b00", new Lattices.Value(Lattices.Bit.ZERO, Lattices.Bit.ZERO)));
+                    p("0b00", new Lattices.Value(bl.create(Lattices.B.ZERO), bl.create(Lattices.B.ZERO))));
         }
     }
 

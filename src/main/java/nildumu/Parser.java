@@ -37,7 +37,7 @@ public class Parser implements Serializable {
         EOF(""),
         COMMENT("/\\*([^*\\n]*(\\*[^/\\n])?)*\\*/"),
         WS("[\\s\\t]"),
-        LBRK("[\\r\\n]"),
+        LBRK("[\\r\\n][\\r\\n]+"),
         INPUT("input"),
         OUTPUT("output"),
         INT("int"),
@@ -121,14 +121,14 @@ public class Parser implements Serializable {
      * Change the id, when changing the parser oder replace the id by {@code null} to build the parser and lexer
      * every time (takes long)
      */
-    public static Generator generator = Generator.getCachedIfPossible("stuff/blaf5ef6534r6r55344474i446u7s5f2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
+    public static Generator generator = Generator.getCachedIfPossible("stuff/blaf5ef65534r6r55344474i446u7s5f2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
             (builder) -> {
                 builder.addRule("program", "use_sec? bit_width? lines", asts -> {
                             MJNode.resetIdCounter();
                             Bit.resetNumberOfCreatedBits();
                             SecurityLattice<?> secLattice = asts.get(0).children().isEmpty() ? BasicSecLattice.get() : ((ListAST<WrapperNode<SecurityLattice<?>>>)asts.get(0)).get(0).wrapped;
                             int declaredBitWidth = asts.get(1).children().isEmpty() ? -1 : ((ListAST<WrapperNode<Integer>>)asts.get(1)).get(0).wrapped;
-                            /**
+                            /*
                              * Calc bit width
                              */
                             int lowerBitWidthBound = asts.get(2).<WrapperNode<List<MJNode>>>as().wrapped.stream().mapToInt(n -> n.accept(new NodeVisitor<Integer>() {
@@ -143,7 +143,7 @@ public class Parser implements Serializable {
                                     int bitWidth = literal.value.size();
                                     if (bitWidth > declaredBitWidth && declaredBitWidth != -1){
                                         //Token literalToken = literal.getMatchedTokens().get(0);
-                                        System.err.println(String.format("Declared bit width of %d is lower than the bit width of literal %s", declaredBitWidth, literal));
+                                        System.err.println(String.format("Declared bit width of %d is lower than the bit width of literal %s", declaredBitWidth, bitWidth));
                                     }
                                     return bitWidth;
                                 }
@@ -916,7 +916,8 @@ public class Parser implements Serializable {
 
         @Override
         public String toPrettyString(String indent, String incr) {
-            return globalBlock.toPrettyString(indent, incr);
+            return methods().stream().map(m -> m.toPrettyString(indent, incr)).collect(Collectors.joining("\n")) +
+                    globalBlock.toPrettyString(indent, incr);
         }
 
         public Collection<MethodNode> methods(){
@@ -976,6 +977,11 @@ public class Parser implements Serializable {
 
         public boolean hasReturnValue() {
             return !body.statementNodes.isEmpty() && body.getLastStatementOrNull() instanceof ReturnStatementNode && ((ReturnStatementNode) body.getLastStatementOrNull()).hasReturnExpression();
+        }
+
+        @Override
+        public String toPrettyString(String indent, String incr) {
+            return indent + String.format("int %s(%s){\n%s\n}\n", name, parameters, body.toPrettyString(indent + incr, incr));
         }
     }
 
@@ -2262,7 +2268,7 @@ public class Parser implements Serializable {
 
         @Override
         public Operator getOperator() {
-            return new Operator.MethodInvocation(definition);
+            return new Operator.MethodInvocation(this);
         }
 
         @Override
