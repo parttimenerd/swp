@@ -1,3 +1,24 @@
+TODO
+----
+- fix bugs (test cases)
+-- SSA
+-- summary approach (but maybe later)
+- clean up
+-- merge dependencies
+-- simplify
+- remove topological walks
+- quickcheck based program generation for common patterns to test termination
+- clean up (merge data and control dependencies, remove old clutter)
+- functional approach :D
+
+
+
+Old todos
+---------
+
+
+
+
 [x] [Value|Bit]::[toString|repr]
 [x] input and output bits
 - operator

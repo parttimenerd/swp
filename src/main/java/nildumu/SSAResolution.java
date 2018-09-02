@@ -3,6 +3,7 @@ package nildumu;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import swp.lexer.Location;
 import swp.parser.lr.BaseAST;
 
 import static nildumu.Parser.*;
@@ -143,17 +144,21 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
 
     @Override
     public VisRet visit(IfStatementNode ifStatement) {
-        visitChildrenDiscardReturn(ifStatement.conditionalExpression);
+        return visit(ifStatement.location, ifStatement.conditionalExpression, ifStatement.ifBlock, ifStatement.elseBlock);
+    }
+
+    public VisRet visit(Location location, ExpressionNode conditionalExpression, BlockNode ifBlock, BlockNode elseBlock) {
+        visitChildrenDiscardReturn(conditionalExpression);
 
         pushNewVariablesScope();
 
-        VisRet toAppend = ifStatement.ifBlock.accept(this);
-        ifStatement.ifBlock.statementNodes.addAll(toAppend.statementsToAdd);
+        VisRet toAppend = ifBlock.accept(this);
+        ifBlock.statementNodes.addAll(toAppend.statementsToAdd);
         Map<Variable, Variable> ifRedefines = newVariables.pop();
 
         pushNewVariablesScope();
-        toAppend = ifStatement.elseBlock.accept(this);
-        ifStatement.elseBlock.statementNodes.addAll(toAppend.statementsToAdd);
+        toAppend = elseBlock.accept(this);
+        elseBlock.statementNodes.addAll(toAppend.statementsToAdd);
         Map<Variable, Variable> elseRedefines = newVariables.pop();
 
         Set<Variable> redefinedVariables = new HashSet<>();
@@ -163,11 +168,11 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
         List<StatementNode> phiStatements = new ArrayList<>();
         for (Variable var : redefinedVariables){
             List<Variable> varsToJoin = new ArrayList<>();
-            varsToJoin.add(ifRedefines.getOrDefault(var, var));
-            varsToJoin.add(elseRedefines.getOrDefault(var, var));
+            varsToJoin.add(ifRedefines.getOrDefault(var, resolve(var)));
+            varsToJoin.add(elseRedefines.getOrDefault(var, resolve(var)));
             Variable created = create(var);
             VariableDeclarationNode localVarDecl =
-                    new VariableDeclarationNode(ifStatement.location, created.name, new PhiNode(ifStatement.location, Collections.singletonList(ifStatement.conditionalExpression), varsToJoin));
+                    new VariableDeclarationNode(location, created.name, new PhiNode(location, Collections.singletonList(conditionalExpression), varsToJoin));
             localVarDecl.definition = created;
             phiStatements.add(localVarDecl);
         }
@@ -176,28 +181,16 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
 
     @Override
     public VisRet visit(WhileStatementNode whileStatement) {
-        visitChildrenCollectReturn(whileStatement.conditionalExpression);
-        pushNewVariablesScope();
-        whileStatement.body.accept(this);
-        Set<Variable> variablesAssigned = getAssignedOutsideVariables(whileStatement.body);
-        Map<Variable, Variable> variableAndWhileEnd = new HashMap<>();
-        for (Variable variable : variablesAssigned){
-            Variable whileEndVariable = resolve(variable);
-            Variable newVariable = create(variable);
-            whileStatement.conditionalExpression = replaceVariableWithExpression(variable, new PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)), whileStatement.conditionalExpression);
-            VariableDeclarationNode decl = new VariableDeclarationNode(whileStatement.location, newVariable,
-                    new PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)));
-            replaceVariable(variable, newVariable, whileStatement.body);
-            whileStatement.body.statementNodes.add(0, decl);
-            whileStatement.conditionalExpression = replaceVariableWithExpression(variable, new PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(variable, whileEndVariable)), whileStatement.conditionalExpression);
-            variableAndWhileEnd.put(variable, whileEndVariable);
+        VisRet ret = visit(whileStatement.location, whileStatement.conditionalExpression, whileStatement.body, new BlockNode(whileStatement.location, new ArrayList<>()));
+        for (StatementNode statementNode : ret.statementsToAdd) {
+            PhiNode phi = (PhiNode)((VariableDeclarationNode)statementNode).expression;
+            Variable whileEnd = phi.joinedVariables.get(0).definition;
+            Variable beforeWhile = phi.joinedVariables.get(1).definition;
+            Variable newWhilePhiVar = basicCreate(whileEnd);
+            replaceVariable(beforeWhile, newWhilePhiVar, whileStatement);
+            whileStatement.body.statementNodes.add(0, new VariableDeclarationNode(whileStatement.location, newWhilePhiVar, phi));
         }
-        popNewVariablesScope();
-        return new VisRet(false,
-                variableAndWhileEnd.entrySet().stream().map(e ->
-                new VariableDeclarationNode(whileStatement.location, create(e.getKey()),
-                        new PhiNode(whileStatement.location, Collections.singletonList(whileStatement.conditionalExpression), Arrays.asList(e.getKey(), e.getValue()))))
-                .collect(Collectors.toList()));
+        return ret;
     }
 
     @Override
@@ -240,13 +233,21 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
         Variable origin = resolveOrigin(variable);
         String name = origin.name + (numberOfVersions(origin) + 1);
         Variable newVariable = new Variable(name, false, false);
-        versionCount.put(origin, numberOfVersions(variable) + 1);
+        Variable pred = resolve(variable);
+        directPredecessor.put(newVariable, pred);
+        versionCount.put(origin, numberOfVersions(origin) + 1);
         reverseMapping.put(newVariable, origin);
         newVariables.get(newVariables.size() - 1).put(origin, newVariable);
-        directPredecessor.put(newVariable, variable);
+        System.out.println(" ++ " + newVariables.get(newVariables.size() - 1));
         return newVariable;
     }
 
+    private Variable basicCreate(Variable variable){
+        String name = variable.name + (numberOfVersions(variable) + 1);
+        Variable newVariable = new Variable(name, false, false);
+        reverseMapping.put(newVariable, resolveOrigin(variable));
+        return newVariable;
+    }
     /**
      * Visit all child nodes and collect the return (flatten the resulting list
      */

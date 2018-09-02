@@ -1,6 +1,8 @@
 package nildumu;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static nildumu.Processor.process;
 import static nildumu.Lattices.*;
@@ -119,6 +121,20 @@ public class BasicTests {
                 "\tx = 0;\n" +
                 "}\n\n" +
                 "l output int o = x;").val("o", vm -> vm.bit(1, B.U)).leakage(l -> l.leaks("l", 1));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"high input int h = 0b0u;\n" +
+            "    if (h[1]) {\n" +
+            "    }",
+            "high input int h = 0b0u;\n" +
+                    "    if (h[1] == 1) {\n" +
+                    "    }",
+            "high input int h = 0b0u;\n" +
+            "    if (h[1] == h[1]) {\n" +
+            "    }"})
+    public void testBitSelectInConditionDoesntThrowExceptions(String program){
+        parse(program);
     }
 
     public ContextMatcher parse(String program){

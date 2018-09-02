@@ -98,7 +98,7 @@ l output int o = fib(h);
     @MethodSource("nildumu.MethodInvocationHandler#getExamplePropLines")
     public void testWeirdFibonacciTermination(String handler){
         Context.LOG.setLevel(Level.INFO);
-        assertTimeoutPreemptively(ofSeconds(10000), () -> parse("     bit_width 2;\n" +
+        assertTimeoutPreemptively(ofSeconds(1), () -> parse("     bit_width 2;\n" +
                 "     h input int h = 0b0u;\n" +
                 "     l input int l = 0b0u;\n" +
                 "     int res = 0;\n" +
@@ -117,6 +117,72 @@ l output int o = fib(h);
                 "     l output int o = fib(h);", MethodInvocationHandler.parse(handler))).leaks(1);
     }
 
+    /**
+     <code>
+     int f(int x) {
+        return g(x);
+     }
+     int g(int x) {
+        return h(x);
+     }
+     int h(int x) {
+        return x;
+     }
+     high input int h = 0buu;
+     low output int o = f(h);
+     </code>
+     Should lead to a leakage of at least 2 bits
+     */
+    @ParameterizedTest
+    @MethodSource("nildumu.MethodInvocationHandler#getExamplePropLines")
+    public void testNestedMethodCalls(String handler){
+        parse("int f(int x) {\n" +
+                "\t    return g(x);\n" +
+                "    }\n" +
+                "    int g(int x) {\n" +
+                "\t    return h(x);\n" +
+                "    }\n" +
+                "    int h(int x) {\n" +
+                "\t    return x;\n" +
+                "    }\n" +
+                "    high input int h = 0buu;\n" +
+                "    low output int o = f(h);", handler).leaksAtLeast(2);
+    }
+
+    /**
+     <code>
+     bit_width 3;
+     int f(int x, int y, int z, int w, int v, int l) {
+         int r = 0;
+         if (l == 0) {
+            r = v;
+         } else {
+            r = f(0, x, y, z, w, l+0b111);
+         }
+         return r;
+     }
+     high input int h = 0buuu;
+     low output int o = f(h, 0, 0, 0, 0, 4);
+     </code>
+     should leak 3 bits
+     */
+    @ParameterizedTest
+    @MethodSource("nildumu.MethodInvocationHandler#getExamplePropLines")
+    public void testConditionalRecursion(String handler){
+        parse("bit_width 3;\n" +
+                "    int f(int x, int y, int z, int w, int v, int l) {\n" +
+                "\t    int r = 0;\n" +
+                "\t    if (l == 0) {\n" +
+                "\t\t    r = v;\n" +
+                "\t    } else {\n" +
+                "\t\t    r = f(0, x, y, z, w, l+0b111);\n" +
+                "\t    }\n" +
+                "\t    return r;\n" +
+                "    }\n" +
+                "    high input int h = 0buuu;\n" +
+                "    low output int o = f(h, 0, 0, 0, 0, 4);", handler).leaksAtLeast(3);
+    }
+
     public static void main(String[] args){
        parse("bit_width 2;\n" +
 "h input int h = 0b0u;\n" +
@@ -132,6 +198,10 @@ l output int o = fib(h);
 
     static ContextMatcher parse(String program){
         return parse(program, MethodInvocationHandler.createDefault());
+    }
+
+    static ContextMatcher parse(String program, String handler){
+        return new ContextMatcher(process(program, Context.Mode.LOOP, MethodInvocationHandler.parse(handler)));
     }
 
     static ContextMatcher parse(String program, MethodInvocationHandler handler){

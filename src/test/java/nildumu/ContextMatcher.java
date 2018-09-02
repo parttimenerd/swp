@@ -87,6 +87,11 @@ public class ContextMatcher {
         public LeakageMatcher leaks(String attackerSec, int leakage){
             return leaks(context.sl.parse(attackerSec), leakage);
         }
+
+        public LeakageMatcher leaksAtLeast(Lattices.Sec sec, int leakage) {
+            assertTrue(graph.leakage(sec) >= leakage, String.format("The calculated leakage for an attacker of level %s should be at least %d, leaking %s", sec, leakage, graph.minCutBits(sec).stream().map(Lattices.Bit::toString).collect(Collectors.joining(", "))));
+            return this;
+        }
     }
 
     public ContextMatcher val(String var, Consumer<ValueMatcher> test){
@@ -100,6 +105,10 @@ public class ContextMatcher {
 
     public ContextMatcher leaks(int leakage){
         return leakage(l -> l.leaks(context.sl.bot(), leakage));
+    }
+
+    public ContextMatcher leaksAtLeast(int leakage){
+        return leakage(l -> l.leaksAtLeast(context.sl.bot(), leakage));
     }
 
     /**
