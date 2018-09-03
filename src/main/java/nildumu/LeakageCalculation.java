@@ -16,69 +16,6 @@ import static nildumu.Lattices.*;
 
 public class LeakageCalculation {
 
-    /** Stores which bits depend on input bits of a specific security level */
-    public static class DependencyStorage {
-        private final Context context;
-        private final Map<Sec<?>, Set<Bit>> bitsPerSec;
-        private final Map<Bit, Set<Sec<?>>> secsPerBit;
-
-        private DependencyStorage(
-                Context context, Map<Sec<?>, Set<Bit>> bitsPerSec, Map<Bit, Set<Sec<?>>> secsPerBit) {
-            this.bitsPerSec = bitsPerSec;
-            this.context = context;
-            this.secsPerBit = secsPerBit;
-        }
-
-        public static DependencyStorage get(Context context) {
-            DefaultMap<Sec<?>, Set<Bit>> bitsPerSec =
-                    new DefaultMap<>(
-                            new HashMap<>(),
-                            new DefaultMap.Extension<Sec<?>, Set<Bit>>() {
-                                @Override
-                                public Set<Bit> defaultValue(Map<Sec<?>, Set<Bit>> map, Sec<?> key) {
-                                    return new HashSet<>();
-                                }
-                            },
-                            FORBID_VALUE_UPDATES,
-                            FORBID_DELETIONS);
-            DefaultMap<Bit, Set<Sec<?>>> secsPerBit =
-                    new DefaultMap<>(
-                            new HashMap<>(),
-                            new DefaultMap.Extension<Bit, Set<Sec<?>>>() {
-                                @Override
-                                public Set<Sec<?>> defaultValue(Map<Bit, Set<Sec<?>>> map, Bit key) {
-                                    return new HashSet<>();
-                                }
-                            },
-                            FORBID_DELETIONS);
-            Set<Bit> processedBits = new HashSet<>();
-            for (Pair<Sec, Bit> secBitPair : context.output.getBits()) {
-                BitLattice.get()
-                        .walkTopologicalOrder(
-                                secBitPair.second,
-                                b -> {
-                                    if (context.isInputBit(b)) {
-                                        bitsPerSec.get(context.getInputSecLevel(b)).add(b);
-                                        secsPerBit.put(b, Collections.singleton(context.getInputSecLevel(b)));
-                                    } else {
-                                        Set<Sec<?>> secLevels =
-                                                b.deps
-                                                        .stream()
-                                                        .flatMap(dep -> secsPerBit.get(dep).stream())
-                                                        .collect(Collectors.toSet());
-                                        secsPerBit.put(b, secLevels);
-                                        for (Sec<?> sec : secLevels) {
-                                            bitsPerSec.get(sec).add(b);
-                                        }
-                                    }
-                                    processedBits.add(b);
-                                },
-                                processedBits::contains, new HashSet<>());
-            }
-            return new DependencyStorage(context, bitsPerSec, secsPerBit);
-        }
-    }
-
     /** A replacement rule for bits */
     public static class Rule {
         public final boolean hasInfiniteStartWeight;
@@ -422,10 +359,6 @@ public class LeakageCalculation {
         public final VisuNode output;
 
         public JungGraph(Context context, Rules rules, Sec<?> sec, Set<Bit> minCutBits) {
-            this(context, rules, sec, minCutBits, false);
-        }
-
-        public JungGraph(Context context, Rules rules, Sec<?> sec, Set<Bit> minCutBits, boolean excludeUnimportantBits) {
             graph = new DirectedSparseGraph<>();
             List<Node> nodes = new ArrayList<>();
             List<Edge> edges = new ArrayList<>();
@@ -448,12 +381,6 @@ public class LeakageCalculation {
             excludedOutputBits.remove(rules.outputAnchorBits.get(sec));
 
             Predicate<Bit> ignoreBit = b -> false;
-
-            if (excludeUnimportantBits){
-                DependencyStorage storage = DependencyStorage.get(context);
-                SecurityLattice<Sec<?>> sl = (SecurityLattice<Sec<?>>)context.sl;
-                ignoreBit = b -> sl.lowerEqualsThan(sl.sup(storage.secsPerBit.get(b).stream()), sec);
-            }
 
             for (Rule rule : rules.rules.values()) {
                 Bit start = rule.start;

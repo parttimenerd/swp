@@ -162,9 +162,6 @@ public class BasicUI {
         storeJsonButton = new JButton();
         storeJsonButton.setText("Store json");
         panel8.add(storeJsonButton, new GridConstraints(1, 6, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        pruneCheckBox = new JCheckBox();
-        pruneCheckBox.setText("Prune");
-        panel8.add(pruneCheckBox, new GridConstraints(1, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         parserErrorLabel = new JLabel();
         parserErrorLabel.setText("Label");
         panel1.add(parserErrorLabel, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
@@ -539,7 +536,7 @@ public class BasicUI {
                 if (attackerSecLevelInput.getSelectedItem() == null) {
                     return;
                 }
-                jungPanel.update(context.getJungGraphForVisu(((SecWrapper) attackerSecLevelInput.getSelectedItem()).sec, pruneCheckBox.isSelected()));
+                jungPanel.update(context.getJungGraphForVisu(((SecWrapper) attackerSecLevelInput.getSelectedItem()).sec));
             } catch (RuntimeException error) {
                 parserErrorLabel.setText(error.getMessage());
                 error.printStackTrace();

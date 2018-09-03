@@ -2373,6 +2373,11 @@ public class Parser implements Serializable {
         public Operator getOperator() {
             return new Operator.ParameterAccess(this.definition);
         }
+
+        @Override
+        public String shortType() {
+            return "pac";
+        }
     }
 
     /**

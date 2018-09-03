@@ -203,7 +203,7 @@ public abstract class MethodInvocationHandler {
             });
             Set<Bit> alreadyVisitedBits = new HashSet<>();
             for (Bit bit : returnValue) {
-                bl.walkTopologicalOrder(bit, newBits::get, s -> false, alreadyVisitedBits);
+                //bl.walkTopologicalOrder(bit, newBits::get, s -> false, alreadyVisitedBits);
             }
             DefaultMap<MJNode, MJNode> newNodes = new DefaultMap<MJNode, MJNode>(
                     (map, node) -> new WrapperNode<MJNode>(node.location, node));
@@ -414,11 +414,11 @@ public abstract class MethodInvocationHandler {
             for (Bit bit : bitGraph.returnValue) {
                 // for every result bit: topological walk that creates the middle bits in an
                 // order that doesn't lead to recursion
-                bl.walkTopologicalOrder(bit, b -> {
+                /*bl.walkTopologicalOrder(bit, b -> {
                     if (minCutBits.contains(b)){
                         newBits.get(b);
                     }
-                }, bitGraph.parameterBits::contains, alreadyVisited);
+                }, bitGraph.parameterBits::contains, alreadyVisited);*/
             }
             // now all middle bits are created and the return bits can be created
             Value ret = bitGraph.returnValue.map(newBits::get);

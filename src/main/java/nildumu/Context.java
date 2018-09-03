@@ -486,11 +486,7 @@ public class Context {
     }
 
     public LeakageCalculation.JungGraph getJungGraphForVisu(Sec<?> secLevel){
-        return getJungGraphForVisu(secLevel, false);
-    }
-
-    public LeakageCalculation.JungGraph getJungGraphForVisu(Sec<?> secLevel, boolean excludeUnimportantBits){
-        return new LeakageCalculation.JungGraph(this, getLeakageGraph().rules, secLevel, getLeakageGraph().minCutBits(secLevel), excludeUnimportantBits);
+        return new LeakageCalculation.JungGraph(this, getLeakageGraph().rules, secLevel, getLeakageGraph().minCutBits(secLevel));
     }
 
     public Set<MJNode> nodes(){

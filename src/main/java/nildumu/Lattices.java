@@ -1045,19 +1045,6 @@ public class Lattices {
         public String toString(Value elem) {
             return elem.toString();
         }
-
-        public void walkTopological(Value start, Consumer<Value> consumer){
-            Set<Bit> alreadyVisitedBits = new HashSet<>();
-            for (Bit bit : start) {
-                bl.walkTopologicalOrder(bit, b -> {
-                    Value value = b.value;
-                    if (value != null){
-                        alreadyVisitedBits.addAll(value.bits);
-                        consumer.accept(value);
-                    }
-                }, s -> false, alreadyVisitedBits);
-            }
-        }
     }
 
     public static class Value implements LatticeElement<Value, ValueLattice>, Iterable<Bit> {

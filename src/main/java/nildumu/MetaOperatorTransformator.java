@@ -279,6 +279,7 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
     public void setDefiningAndConditionalExpressions(MJNode node){
         Map<Variable, ExpressionNode> variableToExpr = new HashMap<>();
         node.accept(new NodeVisitor<Object>() {
+
             @Override
             public Object visit(MJNode node) {
                 visitChildrenDiscardReturn(node);
@@ -308,6 +309,9 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
             }
         });
         node.accept(new NodeVisitor<Object>() {
+
+            MethodNode currentMethod;
+
             @Override
             public Object visit(MJNode node) {
                 visitChildrenDiscardReturn(node);
@@ -317,6 +321,10 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
             @Override
             public Object visit(VariableAccessNode variableAccess) {
                 variableAccess.definingExpression = variableToExpr.get(variableAccess.definition);
+                if (currentMethod != null && currentMethod.parameters.parameterNodes.stream().anyMatch(p -> p.definition == variableAccess.definition)){
+                    variableAccess.definingExpression = new ParameterAccessNode(variableAccess.location, variableAccess.ident);
+                    ((ParameterAccessNode) variableAccess.definingExpression).definition = variableAccess.definition;
+                }
                 return null;
             }
 
@@ -326,6 +334,14 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
                 phi.controlDepStatement = replacedCondStmtsMap.get(phi.controlDepStatement);
                 assert phi.controlDeps.size() == 1;
                 phi.controlDeps = Collections.singletonList(phi.controlDepStatement.conditionalExpression);
+                return null;
+            }
+
+
+            @Override
+            public Object visit(MethodNode method) {
+                currentMethod = method;
+                visitChildrenDiscardReturn(method);
                 return null;
             }
         });

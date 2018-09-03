@@ -195,6 +195,10 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
     @Override
     public VisRet visit(VariableAccessNode variableAccess) {
         variableAccess.definition = resolve(variableAccess.definition);
+        if (currentMethod != null && currentMethod.parameters.parameterNodes.stream().anyMatch(p -> p.definition == variableAccess.definition)){
+            variableAccess.definingExpression = new ParameterAccessNode(variableAccess.location, variableAccess.ident);
+            ((ParameterAccessNode) variableAccess.definingExpression).definition = variableAccess.definition;
+        }
         return VisRet.DEFAULT;
     }
 
@@ -237,7 +241,6 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
         versionCount.put(origin, numberOfVersions(origin) + 1);
         reverseMapping.put(newVariable, origin);
         newVariables.get(newVariables.size() - 1).put(origin, newVariable);
-        System.out.println(" ++ " + newVariables.get(newVariables.size() - 1));
         return newVariable;
     }
 
