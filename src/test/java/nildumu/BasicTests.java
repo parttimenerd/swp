@@ -2,20 +2,12 @@ package nildumu;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.*;
 
 import static nildumu.Processor.process;
 import static nildumu.Lattices.*;
 
 public class BasicTests {
-
-    @Test
-    public void testParseValue(){
-        new ContextMatcher.ValueMatcher(vl.parse("1")).bit(1, B.ONE).bit(2, B.ZERO);
-        new ContextMatcher.ValueMatcher(vl.parse("2")).bit(1, B.ZERO).bit(2, B.ONE).bit(3, B.ZERO);
-        new ContextMatcher.ValueMatcher(vl.parse("-1")).bit(1, B.ONE).bit(2, B.ONE);
-
-    }
 
     @Test
     public void testParser(){
@@ -35,58 +27,65 @@ public class BasicTests {
 
     @Test
     public void testSimpleAssignment(){
-        parse("int x = 1").val("x", 1);
-        parse("int x = -10").val("x", -10);
+        parse("int x = 1").val("x", 1).run();
+        parse("int x = -10").val("x", -10).run();
     }
 
     @Test
     public void testInputAssigment(){
-        parse("l input int l = 0b0u").hasInput("l").val("l", "0b0u");
+        parse("l input int l = 0b0u").hasInput("l").val("l", "0b0u").run();
     }
 
     @Test
     public void testChangingSecLattice(){
-        parse("use_sec diamond; n input int l = 0b0u").val("l", "0b0u").hasInputSecLevel("l", DiamondSecLattice.MID2);
+        parse("use_sec diamond; n input int l = 0b0u").val("l", "0b0u").hasInputSecLevel("l", DiamondSecLattice.MID2).run();
     }
 
     @Test
     public void testBasicOutputAssignment(){
-        parse("h output int o = 0").hasOutput("o").val("o", 0).hasOutputSecLevel("o", BasicSecLattice.HIGH);
-        parse("l input int l = 0b0u; h output int o = l;").val("o", "0b0u");
+        parse("h output int o = 0").hasOutput("o").val("o", 0).hasOutputSecLevel("o", BasicSecLattice.HIGH).run();
+   }
+
+    @Test
+    public void testBasicOutputAssignment2(){
+       parse("l input int l = 0b0u; h output int o = l;").val("o", "0b0u").run();
     }
 
     @Test
     public void testBasicProgramLeakage(){
-        parse("h output int o = 0").leakage(l -> l.leaks("h", 0));
+        parse("h output int o = 0").leakage(l -> l.leaks("h", 0)).run();
     }
 
     @Test
     public void testBasicProgramLeakage2(){
-        parse("h input int h = 0b0u; l output int o = h;").leakage(l -> l.leaks("l", 1));
+        parse("h input int h = 0b0u; l output int o = h;").leakage(l -> l.leaks("l", 1)).run();
     }
 
     @Test
     public void testBasicIf(){
-        parse("int x = 0; if (1) { x = 1 }").val("x1", 1);
+        parse("int x = 0; if (1) { x = 1 }").val("x1", 1).run();
     }
 
-    @Test
-    public void testBitwiseOps(){
-        parse("int x = 0 | 1").val("x", "1");
-        parse("int x = 0b00 | 0b11").val("x", "0b11");
-        parse("l input int l = 0b0u; int x = l | 0b11").val("x", "0b11");
-        parse("l input int l = 0b0u; int x = l & 0b11").val("x", "0b0u");
+    @ParameterizedTest
+    @CsvSource({
+            "'int x = 0 | 1','1'",
+            "'int x = 0b00 | 0b11','0b11'",
+            "'l input int l = 0b0u; int x = l | 0b11','0b11'",
+            "'l input int l = 0b0u; int x = l & 0b11','0b0u'"
+    })
+    public void testBitwiseOps(String program, String xVal){
+        parse(program).val("x", xVal).run();
     }
 
     @Test
     public void testBitwiseOps2(){
         parse("h input int l = 0b0u;\n" +
-                "int x = 2 & l;").val("x", "0b00");
+                "int x = 2 & l;").val("x", "0b00").run();
     }
 
     @Test
     public void testPlusOperator(){
-        parse("int x = 1 + 0").val("x", "1");
+        parse("int x = 1 + 0").val("x", "1").run();
     }
 
     /**
@@ -108,7 +107,7 @@ public class BasicTests {
                 "} else {\n" +
                 "\tx = 0;\n" +
                 "}\n" +
-                "l output int o = x;").val("o", vm -> vm.bit(1, B.U)).leakage(l -> l.leaks("l", 1));
+                "l output int o = x;").val("o", vm -> vm.bit(1, B.U)).leakage(l -> l.leaks("l", 1)).run();
     }
 
     @Test
@@ -120,7 +119,7 @@ public class BasicTests {
                 "} else {\n\n" +
                 "\tx = 0;\n" +
                 "}\n\n" +
-                "l output int o = x;").val("o", vm -> vm.bit(1, B.U)).leakage(l -> l.leaks("l", 1));
+                "l output int o = x;").val("o", vm -> vm.bit(1, B.U)).leakage(l -> l.leaks("l", 1)).run();
     }
 
     @ParameterizedTest

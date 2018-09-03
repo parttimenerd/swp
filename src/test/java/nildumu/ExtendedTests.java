@@ -40,7 +40,7 @@ public class ExtendedTests {
                 "int x = 1;\n" +
                 "if (h){\n" +
                 "    x = h;\n" +
-                "}").val("x2", "0b01");
+                "}").val("x2", "0b01").run();
     }
 
     public ContextMatcher parse(String program){

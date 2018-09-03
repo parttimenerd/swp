@@ -33,7 +33,7 @@ public class FunctionTests {
             "'int bla(int a){return a + 1} int x = bla(1)', '2'"
     })
     public void testBasicFunctionCalls(String program, String expectedValue){
-        parse(program).val("x", expectedValue);
+        parse(program).val("x", expectedValue).run();
     }
 
     @ParameterizedTest
@@ -69,7 +69,7 @@ l output int o = fib(h);
 "	}\n" +
 "	return r;\n" +
 "}\n" +
-"l output int o = fib(h);", MethodInvocationHandler.parse(handler))).leaks(1);
+"l output int o = fib(h);", MethodInvocationHandler.parse(handler))).leaks(1).run();
     }
 
     /**
@@ -114,7 +114,7 @@ l output int o = fib(h);
                 "     while (l) {\n" +
                 "        res = res + fib(h);\n" +
                 "     }\n" +
-                "     l output int o = fib(h);", MethodInvocationHandler.parse(handler))).leaks(1);
+                "     l output int o = fib(h);", MethodInvocationHandler.parse(handler))).leaks(1).run();
     }
 
     /**
@@ -146,7 +146,7 @@ l output int o = fib(h);
                 "\t    return x;\n" +
                 "    }\n" +
                 "    high input int h = 0buu;\n" +
-                "    low output int o = f(h);", handler).leaksAtLeast(2);
+                "    low output int o = f(h);", handler).leaksAtLeast(2).run();
     }
 
     /**
@@ -180,7 +180,7 @@ l output int o = fib(h);
                 "\t    return r;\n" +
                 "    }\n" +
                 "    high input int h = 0buuu;\n" +
-                "    low output int o = f(h, 0, 0, 0, 0, 4);", handler).leaksAtLeast(3);
+                "    low output int o = f(h, 0, 0, 0, 0, 4);", handler).leaksAtLeast(3).run();
     }
 
     public static void main(String[] args){

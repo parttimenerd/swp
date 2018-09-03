@@ -9,10 +9,9 @@ import org.fife.ui.rtextarea.*;
 import java.awt.*;
 import java.io.*;
 import java.nio.file.*;
-import java.sql.Time;
 import java.util.*;
 import java.util.List;
-import java.util.logging.*;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import javax.swing.*;

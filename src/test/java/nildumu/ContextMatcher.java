@@ -1,16 +1,34 @@
 package nildumu;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.function.Executable;
+
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static nildumu.Lattices.bs;
 import static nildumu.Lattices.vl;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class ContextMatcher {
 
+    public static class TestBuilder {
+        List<Executable> testers = new ArrayList<>();
+
+
+        public TestBuilder add(Executable tester){
+            testers.add(tester);
+            return this;
+        }
+
+        public void run(){
+            assertAll(testers.toArray(new Executable[0]));
+        }
+    }
+
     private final Context context;
+    private final TestBuilder builder = new TestBuilder();
 
     public ContextMatcher(Context context) {
         this.context = context;
@@ -18,9 +36,9 @@ public class ContextMatcher {
 
     public ContextMatcher val(String variable, int value){
         Lattices.Value actual = getValue(variable);
-        assertTrue(actual.isConstant(), String.format("Variable %s should have an integer val, has %s", variable, actual.repr()));
-        assertEquals(value, actual.asInt(),
-                String.format("Variable %s should have integer val %d", variable, value));
+        builder.add(() -> assertTrue(actual.isConstant(), String.format("Variable %s should have an integer val, has %s", variable, actual.repr())));
+        builder.add(() -> Assertions.assertEquals(value, actual.asInt(),
+                String.format("Variable %s should have integer val %d", variable, value)));
         return this;
     }
 
@@ -32,13 +50,17 @@ public class ContextMatcher {
         return this;
     }
 
+    private <T> void assertEquals(T expected, T actual, String message){
+        builder.add(() -> assertEquals(expected, actual, message));
+    }
+
     private Lattices.Value getValue(String variable){
         return context.getVariableValue(variable);
     }
 
     public ContextMatcher hasInput(String variable){
-        assertTrue(context.isInputValue(getValue(variable)),
-                String.format("The val of %s is an input val", variable));
+        builder.add(() -> assertTrue(context.isInputValue(getValue(variable)),
+                String.format("The val of %s is an input val", variable)));
         return this;
     }
 
@@ -48,8 +70,8 @@ public class ContextMatcher {
     }
 
     public ContextMatcher hasOutput(String variable){
-        assertTrue(context.output.contains(getValue(variable)),
-                String.format("The val of %s is an output val", variable));
+        builder.add(() -> assertTrue(context.output.contains(getValue(variable)),
+                String.format("The val of %s is an output val", variable)));
         return this;
     }
 
@@ -71,7 +93,7 @@ public class ContextMatcher {
         }
 
         public LeakageMatcher leaks(Lattices.Sec<?> attackerSec, int leakage){
-            assertEquals(leakage, graph.leakage(attackerSec), () -> {
+            builder.add(() -> Assertions.assertEquals(leakage, graph.leakage(attackerSec), () -> {
 
                /* try {
                     calcLeakageShowImage(context, attackerSec);
@@ -80,7 +102,7 @@ public class ContextMatcher {
                 }*/
 
                 return String.format("The calculated leakage for an attacker of level %s should be %d, leaking %s", attackerSec, leakage, graph.minCutBits(attackerSec).stream().map(Lattices.Bit::toString).collect(Collectors.joining(", ")));
-            });
+            }));
             return this;
         }
 
@@ -89,7 +111,7 @@ public class ContextMatcher {
         }
 
         public LeakageMatcher leaksAtLeast(Lattices.Sec sec, int leakage) {
-            assertTrue(graph.leakage(sec) >= leakage, String.format("The calculated leakage for an attacker of level %s should be at least %d, leaking %s", sec, leakage, graph.minCutBits(sec).stream().map(Lattices.Bit::toString).collect(Collectors.joining(", "))));
+            builder.add(() -> assertTrue(graph.leakage(sec) >= leakage, String.format("The calculated leakage for an attacker of level %s should be at least %d, leaking %s", sec, leakage, graph.minCutBits(sec).stream().map(Lattices.Bit::toString).collect(Collectors.joining(", ")))));
             return this;
         }
     }
@@ -119,11 +141,12 @@ public class ContextMatcher {
      */
     public ContextMatcher bit(String varAndIndex, String val){
         String var = varAndIndex.split("\\[")[0];
-        int i = Integer.parseInt(varAndIndex.split("\\[")[0].split("\\]")[0]);
-        return val(var, vm -> vm.bit(i, bs.parse(val)));
+        int i = Integer.parseInt(varAndIndex.split("\\[")[1].split("\\]")[0]);
+        builder.add(() -> Assertions.assertEquals(bs.parse(val), context.getVariableValue(var).get(i).val, String.format("%s should have the bit val %s", varAndIndex, val)));
+        return this;
     }
 
-    public static class ValueMatcher {
+    public class ValueMatcher {
         private final Lattices.Value value;
 
         public ValueMatcher(Lattices.Value value) {
@@ -131,8 +154,12 @@ public class ContextMatcher {
         }
 
         public ValueMatcher bit(int i, Lattices.B val){
-            assertEquals(val, value.get(i).val, String.format("The %dth bit of %s should have the bit val %s", i, value, val));
+            builder.add(() -> Assertions.assertEquals(val, value.get(i).val, String.format("The %dth bit of %s should have the bit val %s", i, value, val)));
             return this;
         }
+    }
+
+    public void run(){
+        builder.run();
     }
 }

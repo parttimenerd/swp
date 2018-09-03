@@ -4,7 +4,7 @@ import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.time.temporal.ValueRange;
 import java.util.*;
-import java.util.function.*;
+import java.util.function.BiPredicate;
 import java.util.stream.*;
 
 import swp.util.Pair;
@@ -345,7 +345,7 @@ public interface Operator {
         abstract B computeBitValue(int i, Value x, Value y);
 
         List<DependencySet> computeDataDependencies(Value x, Value y, List<B> computedBitValues) {
-            return IntStream.range(1, Math.max(x.size(), y.size())).mapToObj(i -> computeDataDependencies(i, x, y, computedBitValues)).collect(Collectors.toList());
+            return IntStream.range(1, Math.max(x.size(), y.size()) + 1).mapToObj(i -> computeDataDependencies(i, x, y, computedBitValues)).collect(Collectors.toList());
         }
 
         abstract DependencySet computeDataDependencies(int i, Value x, Value y, List<B> computedBitValues);
@@ -718,9 +718,9 @@ public interface Operator {
 
         @Override
         Bit compute(Context c, Bit x, Bit y) {
-            if (x == bl.bot){
+            if (x.val == X){
                 return y;
-            } else if (y == bl.bot){
+            } else if (y.val == X){
                 return x;
             } else if (x == y){
                 return x;

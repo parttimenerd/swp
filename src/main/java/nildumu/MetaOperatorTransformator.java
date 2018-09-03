@@ -1,7 +1,5 @@
 package nildumu;
 
-import sun.reflect.generics.visitor.Visitor;
-
 import java.util.*;
 import java.util.function.*;
 import java.util.stream.Collectors;
@@ -19,6 +17,8 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
     private final DefaultMap<ExpressionNode, ExpressionNode> replacedMap = new DefaultMap<>((map, node) -> {
         return repl(node);
     });
+
+    private final DefaultMap<ConditionalStatementNode, ConditionalStatementNode> replacedCondStmtsMap = new DefaultMap<>((map, stmt) -> stmt);
 
     private final Map<WhileStatementNode, WhileStatementNode> whileStmtMap = new HashMap<>();
 
@@ -104,11 +104,11 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
         return new BinaryOperatorNode(left, right, op);
     }
 
-    static ExpressionNode replaceExpressionWithExpression(ExpressionNode node, Predicate<ExpressionNode> matcher, Function<ExpressionNode, ExpressionNode> replacement){
+    ExpressionNode replaceExpressionWithExpression(ExpressionNode node, Predicate<ExpressionNode> matcher, Function<ExpressionNode, ExpressionNode> replacement){
         if (node == null){
             return null;
         }
-        return node.accept(new NodeVisitor<ExpressionNode>() {
+        ExpressionNode replExpr = node.accept(new NodeVisitor<ExpressionNode>() {
             @Override
             public ExpressionNode visit(MJNode node) {
                 visitChildrenDiscardReturn(node);
@@ -142,7 +142,9 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
 
             @Override
             public ExpressionNode visit(PhiNode phi) {
-                return new PhiNode(phi.location, phi.controlDeps.stream().map(e -> e.accept(this)).collect(Collectors.toList()), new ArrayList<>(phi.joinedVariables.stream().map(j -> (VariableAccessNode)visit(j)).collect(Collectors.toList())));
+                PhiNode node = new PhiNode(phi.location, phi.controlDeps.stream().map(e -> e.accept(this)).collect(Collectors.toList()), new ArrayList<>(phi.joinedVariables.stream().map(j -> (VariableAccessNode)visit(j)).collect(Collectors.toList())));
+                node.controlDepStatement = phi.controlDepStatement;
+                return node;
             }
 
             private ExpressionNode replace(ExpressionNode node){
@@ -165,7 +167,15 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
                 node.definition = methodInvocation.definition;
                 return node;
             }
+
+            @Override
+            public ExpressionNode visit(VariableAssignmentNode assignment) {
+                assignment.expression = assignment.expression.accept(this);
+                return null;
+            }
         });
+        replacedMap.put(node, replExpr);
+        return replExpr;
     }
 
     @Override
@@ -229,8 +239,10 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
 
     @Override
     public MJNode visit(IfStatementNode ifStatement){
-        return new IfStatementNode(ifStatement.location, replace(ifStatement.conditionalExpression),
+        ConditionalStatementNode stmt = new IfStatementNode(ifStatement.location, replace(ifStatement.conditionalExpression),
                 (StatementNode)ifStatement.ifBlock.accept(this), (StatementNode)ifStatement.elseBlock.accept(this));
+        replacedCondStmtsMap.put(ifStatement, stmt);
+        return stmt;
     }
 
     @Override
@@ -240,8 +252,10 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
 
     @Override
     public MJNode visit(WhileStatementNode whileStatement){
-        return new WhileStatementNode(whileStatement.location, replace(whileStatement.conditionalExpression),
+        ConditionalStatementNode stmt = new WhileStatementNode(whileStatement.location, replace(whileStatement.conditionalExpression),
                 (StatementNode)whileStatement.body.accept(this));
+        replacedCondStmtsMap.put(whileStatement, stmt);
+        return stmt;
     }
 
     @Override
@@ -263,6 +277,7 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
     }
 
     public void setDefiningAndConditionalExpressions(MJNode node){
+        Map<Variable, ExpressionNode> variableToExpr = new HashMap<>();
         node.accept(new NodeVisitor<Object>() {
             @Override
             public Object visit(MJNode node) {
@@ -280,6 +295,37 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
             public Object visit(PhiNode phi) {
                 visitChildrenDiscardReturn(phi);
                 phi.controlDeps = phi.controlDeps.stream().map(MetaOperatorTransformator.this::replace).collect(Collectors.toList());
+                phi.joinedVariables.forEach(v -> v.definingExpression = replace(v.definingExpression));
+                return null;
+            }
+
+            @Override
+            public Object visit(VariableAssignmentNode assignment) {
+                visitChildrenDiscardReturn(assignment);
+                //assignment.expression = replace(assignment.expression);
+                variableToExpr.put(assignment.definition, assignment.expression);
+                return null;
+            }
+        });
+        node.accept(new NodeVisitor<Object>() {
+            @Override
+            public Object visit(MJNode node) {
+                visitChildrenDiscardReturn(node);
+                return null;
+            }
+
+            @Override
+            public Object visit(VariableAccessNode variableAccess) {
+                variableAccess.definingExpression = variableToExpr.get(variableAccess.definition);
+                return null;
+            }
+
+            @Override
+            public Object visit(PhiNode phi) {
+                visitChildrenDiscardReturn(phi);
+                phi.controlDepStatement = replacedCondStmtsMap.get(phi.controlDepStatement);
+                assert phi.controlDeps.size() == 1;
+                phi.controlDeps = Collections.singletonList(phi.controlDepStatement.conditionalExpression);
                 return null;
             }
         });

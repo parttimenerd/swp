@@ -2,6 +2,8 @@ package nildumu;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static nildumu.FunctionTests.parse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -86,6 +88,17 @@ public class SSATests {
                 "     while (true) {\n" +
                 "        r = 1;\n" +
                 "     }").globalBlock.getLastStatementOrNull().toPrettyString());
+    }
+
+    @Test
+    public void testWhileSetsExpr(){
+        List<Parser.StatementNode> stmts = ((Parser.WhileStatementNode)toSSA("h input int h = 0b0u;\n" +
+                "int x = 0;\n" +
+                "while (h == 0){\n" +
+                "\tx = x | 0b11;\n" +
+                "}\n" +
+                "l output int o = x;").globalBlock.statementNodes.get(2)).body.statementNodes;
+        assertEquals(((Parser.VariableAssignmentNode)stmts.get(1)).definition, ((Parser.PhiNode)((Parser.VariableAssignmentNode)stmts.get(0)).expression).joinedVariables.get(0).definition);
     }
 
     @Test

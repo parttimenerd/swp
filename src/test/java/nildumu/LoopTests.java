@@ -18,7 +18,7 @@ public class LoopTests {
     @Test
     public void testBasic(){
         parse("h input int h = 0b0u;\n" +
-                "l output int o = h;").leakage(l -> l.leaks("l", 1));
+                "l output int o = h;").leakage(l -> l.leaks("l", 1)).run();
     }
 
     /**
@@ -38,7 +38,32 @@ public class LoopTests {
                 "while (h == 0){\n" +
                 "\tx = x + 1;\n" +
                 "}\n" +
-                "l output int o = x;").leakage(l -> l.leaks("l", 1));
+                "l output int o = x;")
+                .leaks(1).run();
+    }
+
+    /**
+     * <code>
+     h input int h = 0b0u;
+     int x = 0;
+     while (h == 0){
+        x = x | 1;
+     }
+     l output int o = x;
+     * </code>
+     */
+    @Test
+    public void testBasicLoop_condensed(){
+        parse("h input int h = 0b0u;\n" +
+                "int x = 0;\n" +
+                "while (h == 0){\n" +
+                "\tx = x | 0b11;\n" +
+                "}\n" +
+                "l output int o = x;")
+                .bit("x3[2]", "u")
+                .bit("x2[1]", "u")
+                .bit("o[1]", "u")
+                .leaks(1).run();
     }
 
     @Test
@@ -57,7 +82,7 @@ public class LoopTests {
                 "while (h){\n" +
                 "\th = h;\n" +
                 "}\n" +
-                "l output int o = h").leaks(1);
+                "l output int o = h").leaks(1).run();
     }
 
     /**
@@ -118,7 +143,7 @@ public class LoopTests {
                 "while (l){\n" +
                 "  h = [2](h[2] | h[1]);\n" +
                 "}\n" +
-                "l output int o = h;").leaks(1));
+                "l output int o = h;").leaks(1).run());
     }
 
     /**
@@ -133,7 +158,7 @@ public class LoopTests {
      </code>
      */
     @ParameterizedTest
-    @ValueSource(ints = {1,2, 10, 100})
+    @ValueSource(ints = {1, 2, 10, 100})
     public void testBasicLoop4_condensed2(int secretSize){
         assertTimeoutPreemptively(ofMillis(1000000), () ->
                 parse("bit_width 2;\n" +
@@ -142,7 +167,7 @@ public class LoopTests {
                         "while (l){\n" +
                         "  h = [2](h[2] | h[1]);\n" +
                         "}\n" +
-                        "l output int o = h;").leaks(secretSize));
+                        "l output int o = h;").leaks(secretSize).run());
     }
 
     /**
@@ -169,10 +194,11 @@ public class LoopTests {
                         "            h = [2](h[2] | h[1]);\n" +
                         "        }\n" +
                         "     }\n" +
-                        "     l output int o = h;").leaks(1));
+                        "     l output int o = h;").leaks(1).run());
     }
 
     ContextMatcher parse(String program){
+        System.out.println(" ##SSA " + Parser.process(program).toPrettyString());
         return new ContextMatcher(process(program, Context.Mode.LOOP));
     }
 }

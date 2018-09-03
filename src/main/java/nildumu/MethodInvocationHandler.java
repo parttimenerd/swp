@@ -6,18 +6,13 @@ import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
 
-import edu.uci.ics.jung.algorithms.flows.EdmondsKarpMaxFlow;
-import edu.uci.ics.jung.graph.DirectedSparseGraph;
-import edu.uci.ics.jung.graph.util.EdgeType;
 import io.github.livingdocumentation.dotdiagram.DotGraph;
-import jdk.nashorn.internal.runtime.regexp.joni.constants.Arguments;
 import swp.util.Pair;
 
 import static nildumu.Context.*;
 import static nildumu.Lattices.B.U;
 import static nildumu.Lattices.*;
-import static nildumu.LeakageCalculation.bit;
-import static nildumu.LeakageCalculation.rule;
+import static nildumu.LeakageCalculation.*;
 import static nildumu.Parser.*;
 import static nildumu.Util.p;
 

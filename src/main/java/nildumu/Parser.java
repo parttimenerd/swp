@@ -1,17 +1,15 @@
 package nildumu;
 
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
-
 import java.io.Serializable;
 import java.util.*;
 import java.util.stream.*;
 
-import jdk.nashorn.internal.ir.Block;
-import swp.*;
+import swp.SWPException;
 import swp.lexer.*;
 import swp.parser.lr.*;
 import swp.util.Utils;
 
+import static nildumu.Checks.checkAndThrow;
 import static nildumu.Lattices.*;
 import static nildumu.Parser.LexerTerminal.*;
 
@@ -436,8 +434,9 @@ public class Parser implements Serializable {
         ProgramNode program = (ProgramNode) generator.parse(input);
         new NameResolution(program).resolve();
         new SSAResolution(program).resolve();
+        checkAndThrow(program);
         ProgramNode transformedProgram = (ProgramNode)new MetaOperatorTransformator(program.context.maxBitWidth).process(program);
-        SSAResolution.basicChecks(transformedProgram);
+        checkAndThrow(transformedProgram);
         return transformedProgram;
     }
 
@@ -568,7 +567,11 @@ public class Parser implements Serializable {
          * Visit all direct children with the visitor and return the results
          */
         default List<R> visitChildren(MJNode node){
-            return node.children().stream().map(c -> ((MJNode)c).accept(this)).collect(Collectors.toList());
+            try {
+                return node.children().stream().map(c -> ((MJNode) c).accept(this)).collect(Collectors.toList());
+            } catch (NullPointerException ex){
+                return  null;
+            }
         }
 
         /**
@@ -784,7 +787,7 @@ public class Parser implements Serializable {
         }
 
         Operator getOperator(){
-            throw new NotImplementedException();
+            throw new UnsupportedOperationException();
         }
 
         public abstract String shortType();
@@ -1405,7 +1408,7 @@ public class Parser implements Serializable {
     public static class VariableAssignmentNode extends StatementNode {
         Variable definition;
         public final String variable;
-        public final ExpressionNode expression;
+        public ExpressionNode expression;
 
         public VariableAssignmentNode(Location location, String variable, ExpressionNode expression) {
             super(location);
@@ -1510,13 +1513,11 @@ public class Parser implements Serializable {
     /**
      * A while statement
      */
-    public static class WhileStatementNode extends StatementNode {
-        public ExpressionNode conditionalExpression;
+    public static class WhileStatementNode extends ConditionalStatementNode {
         public final BlockNode body;
 
         public WhileStatementNode(Location location, ExpressionNode conditionalExpression, StatementNode body) {
-            super(location);
-            this.conditionalExpression = conditionalExpression;
+            super(location, conditionalExpression);
             this.body = appendWhileEnd(body instanceof BlockNode ? (BlockNode)body : new BlockNode(body.location, new ArrayList<>(Arrays.asList(body))));
         }
 
@@ -1570,17 +1571,24 @@ public class Parser implements Serializable {
         }
     }
 
+    public abstract static class ConditionalStatementNode extends StatementNode {
+        public final ExpressionNode conditionalExpression;
+
+        public ConditionalStatementNode(Location location, ExpressionNode conditionalExpression) {
+            super(location);
+            this.conditionalExpression = conditionalExpression;
+        }
+    }
+
     /**
      * An if statement with two branches
      */
-    public static class IfStatementNode extends StatementNode {
-        public final ExpressionNode conditionalExpression;
+    public static class IfStatementNode extends ConditionalStatementNode {
         public final BlockNode ifBlock;
         public final BlockNode elseBlock;
 
         public IfStatementNode(Location location, ExpressionNode conditionalExpression, StatementNode ifBlock, StatementNode elseBlock) {
-            super(location);
-            this.conditionalExpression = conditionalExpression;
+            super(location, conditionalExpression);
             this.ifBlock = appendIfEnd(ifBlock instanceof BlockNode ? (BlockNode)ifBlock : new BlockNode(ifBlock.location, new ArrayList<>(Arrays.asList(ifBlock))));
             this.elseBlock = appendIfEnd(elseBlock instanceof BlockNode ? (BlockNode)elseBlock : new BlockNode(elseBlock.location, new ArrayList<>(Arrays.asList(elseBlock))));
         }
@@ -2373,6 +2381,7 @@ public class Parser implements Serializable {
     public static class PhiNode extends ExpressionNode {
         public List<ExpressionNode> controlDeps;
         public final List<VariableAccessNode> joinedVariables;
+        public ConditionalStatementNode controlDepStatement;
 
         public PhiNode(Location location, List<ExpressionNode> controlDeps, ArrayList<VariableAccessNode> joinedVariables) {
             super(location);

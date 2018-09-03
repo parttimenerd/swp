@@ -1,9 +1,7 @@
 package nildumu;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
-import swp.lexer.Location;
 import swp.parser.lr.BaseAST;
 
 import static nildumu.Parser.*;
@@ -73,7 +71,6 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
     public void resolve(MJNode node){
         node.accept(this);
         assignDefiningExpressions(node);
-        basicChecks(node);
     }
 
     void pushNewVariablesScope(){
@@ -144,11 +141,11 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
 
     @Override
     public VisRet visit(IfStatementNode ifStatement) {
-        return visit(ifStatement.location, ifStatement.conditionalExpression, ifStatement.ifBlock, ifStatement.elseBlock);
+        return visit(ifStatement, ifStatement.ifBlock, ifStatement.elseBlock);
     }
 
-    public VisRet visit(Location location, ExpressionNode conditionalExpression, BlockNode ifBlock, BlockNode elseBlock) {
-        visitChildrenDiscardReturn(conditionalExpression);
+    public VisRet visit(ConditionalStatementNode statement, BlockNode ifBlock, BlockNode elseBlock) {
+        visitChildrenDiscardReturn(statement.conditionalExpression);
 
         pushNewVariablesScope();
 
@@ -171,8 +168,10 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
             varsToJoin.add(ifRedefines.getOrDefault(var, resolve(var)));
             varsToJoin.add(elseRedefines.getOrDefault(var, resolve(var)));
             Variable created = create(var);
+            PhiNode phi = new PhiNode(statement.location, Collections.singletonList(statement.conditionalExpression), varsToJoin);
+            phi.controlDepStatement = statement;
             VariableDeclarationNode localVarDecl =
-                    new VariableDeclarationNode(location, created.name, new PhiNode(location, Collections.singletonList(conditionalExpression), varsToJoin));
+                    new VariableDeclarationNode(statement.location, created.name, phi);
             localVarDecl.definition = created;
             phiStatements.add(localVarDecl);
         }
@@ -181,7 +180,7 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
 
     @Override
     public VisRet visit(WhileStatementNode whileStatement) {
-        VisRet ret = visit(whileStatement.location, whileStatement.conditionalExpression, whileStatement.body, new BlockNode(whileStatement.location, new ArrayList<>()));
+        VisRet ret = visit(whileStatement, whileStatement.body, new BlockNode(whileStatement.location, new ArrayList<>()));
         for (StatementNode statementNode : ret.statementsToAdd) {
             PhiNode phi = (PhiNode)((VariableDeclarationNode)statementNode).expression;
             Variable whileEnd = phi.joinedVariables.get(0).definition;
@@ -243,7 +242,8 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
     }
 
     private Variable basicCreate(Variable variable){
-        String name = variable.name + (numberOfVersions(variable) + 1);
+        Variable origin = resolveOrigin(variable);
+        String name = origin.name + (numberOfVersions(origin) + 1);
         Variable newVariable = new Variable(name, false, false);
         reverseMapping.put(newVariable, resolveOrigin(variable));
         return newVariable;
@@ -441,60 +441,5 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
                 }
             });
         }
-    }
-
-    static void basicChecks(MJNode node){
-        node.accept(new NodeVisitor<Object>() {
-            @Override
-            public Object visit(MJNode node) {
-                visitChildrenDiscardReturn(node);
-                return null;
-            }
-
-            @Override
-            public Object visit(VariableAccessNode variableAccess) {
-                if (variableAccess.definition == null){
-                    throw new NildumuError(String.format("%s has no associated definition", variableAccess.toString()));
-                }
-                if (variableAccess.definingExpression == null){
-                    throw new NildumuError(String.format("%s has no defining expression", variableAccess.toString()));
-                }
-                return null;
-            }
-
-            @Override
-            public Object visit(ParameterAccessNode variableAccess) {
-                if (variableAccess.definition == null){
-                    throw new NildumuError(String.format("%s has no associated definition", variableAccess.toString()));
-                }
-                return null;
-            }
-
-
-            @Override
-            public Object visit(ParameterNode parameter) {
-                return null;
-            }
-
-            @Override
-            public Object visit(VariableDeclarationNode variableDeclaration) {
-                visitChildrenDiscardReturn(variableDeclaration);
-                if (variableDeclaration.definition == null){
-                    throw new NildumuError(String.format("%s has no associated definition", variableDeclaration.toString()));
-                }
-                return null;
-            }
-
-            @Override
-            public Object visit(PhiNode phi) {
-                phi.joinedVariables.forEach(this::visit);
-                return null;
-            }
-
-            @Override
-            public Object visit(MethodNode method) {
-                return null;
-            }
-        });
     }
 }
