@@ -2,15 +2,14 @@ package nildumu;
 
 import java.util.*;
 import java.util.function.Predicate;
-import java.util.stream.*;
+import java.util.stream.Collectors;
 
 import edu.uci.ics.jung.algorithms.flows.EdmondsKarpMaxFlow;
 import edu.uci.ics.jung.graph.*;
 import edu.uci.ics.jung.graph.util.EdgeType;
 import swp.util.Pair;
 
-import static nildumu.Context.*;
-import static nildumu.DefaultMap.ForbiddenAction.*;
+import static nildumu.Context.INFTY;
 import static nildumu.Lattices.B.X;
 import static nildumu.Lattices.*;
 
@@ -398,22 +397,8 @@ public class LeakageCalculation {
 
     }
 
-    public static Set<Bit> nonConstantCs(Set<Bit> cs) {
-        return cs.stream()
-                .flatMap(
-                        c -> {
-                            if (v(c).isConstant()) {
-                                return nonConstantCs(c.controlDeps).stream();
-                            }
-                            return Stream.of(c);
-                        })
-                .collect(Collectors.toSet());
-    }
-
     public static Set<Bit> rule(Bit bit) {
-        return Stream.concat(d(bit).stream(), nonConstantCs(c(bit)).stream())
-                .filter(Bit::isUnknown)
-                .collect(Collectors.toSet());
+        return bit.deps;
     }
 
     public static Rules rules(Context context) {

@@ -120,7 +120,6 @@ public abstract class MethodInvocationHandler {
         @Override
         public Value analyze(Context c, MethodInvocationNode callSite, List<Value> arguments) {
             MethodNode method = callSite.definition;
-            System.out.println(method.name + methodCallCounter.get(method));
             if (methodCallCounter.get(method) < maxRec) {
                 methodCallCounter.put(method, methodCallCounter.get(method) + 1);
                 c.pushNewMethodInvocationState(callSite);
@@ -129,16 +128,8 @@ public abstract class MethodInvocationHandler {
                 }
                 Processor.process(c, method.body);
                 Value ret = c.getReturnValue();
-                DefaultMap<MJNode, MJNode> newNodes = new DefaultMap<MJNode, MJNode>(
-                        (map, node) -> new WrapperNode<MJNode>(node.location, node));
-                /*vl.walkTopological(ret, v -> {
-                    if (v.node() != null){
-                        v.node(newNodes.get(v.node()));
-                    }
-                });*/
                 c.popMethodInvocationState();
                 methodCallCounter.put(method, methodCallCounter.get(method) - 1);
-                System.out.println(method.name + methodCallCounter.get(method) + "ret");
                 return ret;
             }
             return botHandler.analyze(c, callSite, arguments);
@@ -171,49 +162,66 @@ public abstract class MethodInvocationHandler {
                 }
             }
             this.returnValue = returnValue;
+            assertThatAllBitsAreNotNull();
         }
 
-        public static Bit cloneBit(Context context, Bit bit, DependencySet dataDeps, DependencySet controlDeps, Function<Bit, Set<Bit>> bitVersionsCreator){
+        private void assertThatAllBitsAreNotNull(){
+            returnValue.forEach(b -> {
+                assert b != null: "Return bits shouldn't be null";
+            });
+            vl.walkBits(Arrays.asList(returnValue), b -> {
+                assert b != null: "Bits shouldn't be null";
+            });
+            vl.walkBits(parameters, b -> {
+                assert b != null: "Parameters bits shouldn't null";
+            });
+        }
+
+        public static Bit cloneBit(Context context, Bit bit, DependencySet dataDeps, DependencySet controlDeps){
             Bit clone;
             if (bit.isUnknown()) {
                 clone = bl.create(U, dataDeps, controlDeps);
             } else {
                 clone = bl.create(v(bit));
             }
-            context.bitVersions(clone, bitVersionsCreator.apply(bit));
             context.repl(clone, context.repl(bit));
             return clone;
         }
 
         public Value applyToArgs(Context context, List<Value> arguments){
             List<Value> extendedArguments = IntStream.range(0, arguments.size()).mapToObj(i -> arguments.get(i).extend(parameters.get(i).size())).collect(Collectors.toList());
-            DefaultMap<Bit, Bit> newBits = new DefaultMap<Bit, Bit>((map, bit) -> {
+            Map<Bit, Bit> newBits = new HashMap<>();
+            // populate
+            vl.walkBits(returnValue, bit -> {
                 if (parameterBits.contains(bit)){
                     Pair<Integer, Integer> loc = bitInfo.get(bit);
-                    return extendedArguments.get(loc.first).get(loc.second);
+                    Bit argBit = extendedArguments.get(loc.first).get(loc.second);
+                    newBits.put(bit, argBit);
+                } else {
+                    Bit clone = cloneBit(context, bit, d(bit), c(bit));
+                    clone.value(bit.value());
+                    newBits.put(bit, clone);
                 }
-                return cloneBit(context, bit, d(bit).map(map::get), c(bit).map(map::get), clone -> {
-                    return context.bitVersions(bit).stream().map(b -> {
-                        if (b == bit){
-                            return clone;
-                        }
-                        return map.get(b);
-                    }).collect(Collectors.toSet());
-                });
             });
-            Set<Bit> alreadyVisitedBits = new HashSet<>();
-            for (Bit bit : returnValue) {
-                //bl.walkTopologicalOrder(bit, newBits::get, s -> false, alreadyVisitedBits);
-            }
-            DefaultMap<MJNode, MJNode> newNodes = new DefaultMap<MJNode, MJNode>(
-                    (map, node) -> new WrapperNode<MJNode>(node.location, node));
             DefaultMap<Value, Value> newValues = new DefaultMap<Value, Value>((map, value) -> {
                 if (parameters.contains(value)){
                     return arguments.get(parameters.indexOf(value));
                 }
-                Value clone = value.map(newBits::get);
-                clone.node(newNodes.get(value.node()));
+                Value clone = value.map(b -> {
+                    if (!parameterBits.contains(b)) {
+                        return newBits.get(b);
+                    }
+                    return b;
+                });
+                clone.node(value.node());
                 return value;
+            });
+            // update dependencies
+            newBits.forEach((old, b) -> {
+                if (!parameterBits.contains(old)) {
+                    b.setDeps(d(b).map(newBits::get), c(b).map(newBits::get));
+                }
+                //b.value(old.value());
             });
             return returnValue.map(newBits::get);
         }
@@ -265,22 +273,28 @@ public abstract class MethodInvocationHandler {
             DotGraph dotGraph = new DotGraph(name);
             DotGraph.Digraph g = dotGraph.getDigraph();
             Set<Bit> alreadyVisited = new HashSet<>();
-            Function<Bit, String> dotLabel = b -> b.uniqueId() + ": " + b.toString();
+            Function<Bit, String> dotLabel = b -> b.uniqueId() + ": " + b.toString().replace("|", "or");
             for (Bit bit : returnValue) {
                 bl.walkBits(bit, b -> {
                     DotGraph.Node node = g.addNode(b.uniqueId());
                     node.setLabel(dotLabel.apply(b));
-                    b.deps.forEach(d -> g.addAssociation(dotLabel.apply(b), dotLabel.apply(b)));
+                    b.deps.forEach(d -> g.addAssociation(b.uniqueId(), d.uniqueId()));
                 }, b -> false, alreadyVisited);
             }
+            vl.walkBits(parameters, b -> {
+                if (!alreadyVisited.contains(b)){
+                    g.addNode(b.uniqueId());
+                    alreadyVisited.add(b);
+                }
+            });
             g.addNode("return").setLabel("return");
-            returnValue.forEach(b -> g.addAssociation("return", dotLabel.apply(b)));
+            returnValue.forEach(b -> g.addAssociation("return", b.uniqueId()));
             g.addNode(name).setLabel(name);
             for (int i = 0; i < parameters.size(); i++) {
                 Value param = parameters.get(i);
                 String nodeId = String.format("param %d", i);
                 g.addNode(nodeId).setLabel(String.format("param %d", i));
-                param.forEach(b -> g.addAssociation(dotLabel.apply(b), nodeId));
+                param.forEach(b -> g.addAssociation(b.uniqueId(), nodeId));
                 g.addAssociation(nodeId, name);
             }
             return dotGraph;
@@ -332,7 +346,6 @@ public abstract class MethodInvocationHandler {
             MethodInvocationHandler handler = createHandler(curVersion);
             for (int i = 0; i < maxIterations; i++) {
                 for (MethodNode method : program.methods()) {
-
                     curVersion.put(method, methodIteration(program.context, callSites.get(method), handler, curVersion.get(method).parameters));
                 }
                 outputDots(curVersion, i + 1);
@@ -378,8 +391,7 @@ public abstract class MethodInvocationHandler {
          */
         BitGraph reduce(Context context, BitGraph bitGraph){
             DefaultMap<Bit, Bit> newBits = new DefaultMap<Bit, Bit>((map, bit) -> {
-               return BitGraph.cloneBit(context, bit, ds.create(bitGraph.calcReachableParamBits(bit)), ds.bot(),
-                       Collections::singleton);
+               return BitGraph.cloneBit(context, bit, ds.create(bitGraph.calcReachableParamBits(bit)), ds.bot());
             });
             Value ret = bitGraph.returnValue.map(newBits::get);
             ret.node(bitGraph.returnValue.node());
@@ -407,8 +419,7 @@ public abstract class MethodInvocationHandler {
                 if (bitGraph.parameterBits.contains(bit)){
                     return bit; // don't replace the parameter bits
                 }
-                return BitGraph.cloneBit(context, bit, ds.create(bitGraph.calcReachableBits(bit, anchorBits)).map(map::get), ds.bot(),
-                        Collections::singleton);
+                return BitGraph.cloneBit(context, bit, ds.create(bitGraph.calcReachableBits(bit, anchorBits)).map(map::get), ds.bot());
             });
             Set<Bit> alreadyVisited = new HashSet<>();
             for (Bit bit : bitGraph.returnValue) {

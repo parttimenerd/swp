@@ -2,14 +2,15 @@ package nildumu;
 
 import java.time.Duration;
 import java.util.logging.Level;
+import java.util.stream.*;
 
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.*;
 import org.junit.jupiter.params.provider.*;
 
 import static java.time.Duration.ofSeconds;
 import static nildumu.Processor.process;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
-import org.junit.jupiter.api.Test;
 
 public class FunctionTests {
 
@@ -37,9 +38,9 @@ public class FunctionTests {
     }
 
     @ParameterizedTest
-    @MethodSource("nildumu.MethodInvocationHandler#getExamplePropLines")
+    @MethodSource("handlers")
     public void testTrivialRecursionTerminates(String handler){
-        assertTimeoutPreemptively(ofSeconds(100), () -> parse("int bla(){ return bla() }", MethodInvocationHandler.parse(handler)));
+        assertTimeoutPreemptively(ofSeconds(100), () -> parse("int bla(){ return bla() }", handler));
     }
     
     /**
@@ -57,10 +58,9 @@ l output int o = fib(h);
      </code>
      */
     @ParameterizedTest
-    @ValueSource(strings = {"handler=call_string;maxrec=1;bot=basic", "handler=call_string;maxrec=2;bot=basic"})
-    @MethodSource("nildumu.MethodInvocationHandler#getExamplePropLines")
+    @MethodSource("handlers")
     public void testFibonacci(String handler){
-        assertTimeoutPreemptively(ofSeconds(10000), () -> parse("bit_width 2;\n" +
+        assertTimeoutPreemptively(ofSeconds(10), () -> parse("bit_width 2;\n" +
 "h input int h = 0b0u;\n" +
 "int fib(int a){\n" +
 "	int r = 1;\n" +
@@ -69,8 +69,30 @@ l output int o = fib(h);
 "	}\n" +
 "	return r;\n" +
 "}\n" +
-"l output int o = fib(h);", MethodInvocationHandler.parse(handler))).leaks(1).run();
+"l output int o = fib(h);", handler)).leaks(1).run();
     }
+
+    /**
+     <code>
+     bit_width 2;
+     h input int h = 0b0u;
+     int f(int a){
+        return f(a) | 1;
+     }
+     l output int o = f(h);
+     </code>
+     */
+    @ParameterizedTest
+    @MethodSource("handlers")
+    public void testDepsOnFunctionResult(String handler){
+        assertTimeoutPreemptively(ofSeconds(10000), () -> parse("bit_width 2;\n" +
+                "     h input int h = 0b0u;\n" +
+                "     int f(int a){\n" +
+                "        return f(a) | 1;\n" +
+                "     }\n" +
+                "     l output int o = f(h);", handler).leaks(1).run());
+    }
+
 
     /**
      <code>
@@ -94,11 +116,10 @@ l output int o = fib(h);
      </code>
      */
     @ParameterizedTest
-    @ValueSource(strings = {"handler=basic", "handler=call_string;maxrec=1;bot=basic", "handler=call_string;maxrec=2;bot=basic"})
-    @MethodSource("nildumu.MethodInvocationHandler#getExamplePropLines")
+    @MethodSource("handlers")
     public void testWeirdFibonacciTermination(String handler){
         Context.LOG.setLevel(Level.INFO);
-        assertTimeoutPreemptively(ofSeconds(1), () -> parse("     bit_width 2;\n" +
+        assertTimeoutPreemptively(ofSeconds(10), () -> parse(
                 "     h input int h = 0b0u;\n" +
                 "     l input int l = 0b0u;\n" +
                 "     int res = 0;\n" +
@@ -114,7 +135,7 @@ l output int o = fib(h);
                 "     while (l) {\n" +
                 "        res = res + fib(h);\n" +
                 "     }\n" +
-                "     l output int o = fib(h);", MethodInvocationHandler.parse(handler))).leaks(1).run();
+                "     l output int o = fib(h);", handler)).leaks(1).run();
     }
 
     /**
@@ -134,7 +155,7 @@ l output int o = fib(h);
      Should lead to a leakage of at least 2 bits
      */
     @ParameterizedTest
-    @MethodSource("nildumu.MethodInvocationHandler#getExamplePropLines")
+    @MethodSource("handlers")
     public void testNestedMethodCalls(String handler){
         parse("int f(int x) {\n" +
                 "\t    return g(x);\n" +
@@ -167,7 +188,7 @@ l output int o = fib(h);
      should leak 3 bits
      */
     @ParameterizedTest
-    @MethodSource("nildumu.MethodInvocationHandler#getExamplePropLines")
+    @MethodSource("handlers")
     public void testConditionalRecursion(String handler){
         parse("bit_width 3;\n" +
                 "    int f(int x, int y, int z, int w, int v, int l) {\n" +
@@ -184,16 +205,13 @@ l output int o = fib(h);
     }
 
     public static void main(String[] args){
-       parse("bit_width 2;\n" +
-"h input int h = 0b0u;\n" +
-"int fib(int a){\n" +
-"	int r = 1;\n" +
-"	if (a > 1){\n" +
-"		r = fib(a - 1);\n" +
-"	}\n" +
-"	return r;\n" +
-"}\n" +
-"l output int o = fib(h);", MethodInvocationHandler.parse("handler=call_string;maxrec=2;bot=basic"));
+        //Context.LOG.setLevel(Level.INFO);
+        String program = "bit_width 2;\n" +
+"int f(int a){\n" +
+"	return f(((1 ^ a) ^ 1));\n" +
+"}\n" ;
+        System.err.println(Parser.process(program).toPrettyString());
+       parse(program, MethodInvocationHandler.parse("handler=summary;maxiter=3;bot=basic;dot=dots"));
     }
 
     static ContextMatcher parse(String program){
@@ -204,7 +222,22 @@ l output int o = fib(h);
         return new ContextMatcher(process(program, Context.Mode.LOOP, MethodInvocationHandler.parse(handler)));
     }
 
-    static ContextMatcher parse(String program, MethodInvocationHandler handler){
+    static ContextMatcher parse(String program, MethodInvocationHandler handler) {
         return new ContextMatcher(process(program, Context.Mode.LOOP, handler));
+    }
+
+    static ContextMatcher parse(String program, String handler, int bitWidth) {
+        if (bitWidth > 1){
+            Context.LOG.setLevel(Level.INFO);
+        }
+        return parse(String.format("bit_width %d;\n%s", bitWidth, program), handler);
+    }
+
+    static Stream<String> handlers(){
+        return Stream.concat(Stream.of("handler=basic", "handler=call_string;maxrec=1;bot=basic", "handler=call_string;maxrec=2;bot=basic"), MethodInvocationHandler.getExamplePropLines().stream());
+    }
+
+    static Stream<Arguments> handlersWBitWidth(){
+        return handlers().flatMap(s -> Stream.of(2, 3).map(i -> Arguments.of(s, i)));
     }
 }

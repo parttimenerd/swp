@@ -200,7 +200,6 @@ public class BasicUI {
     private JTable variableValueTable;
     private JButton storeJsonButton;
     private JComboBox modeComboBox;
-    private JCheckBox pruneCheckBox;
     private JCheckBox autoRunCheckBox;
     private JButton runButton;
     private JButton stopButton;
@@ -365,9 +364,6 @@ public class BasicUI {
                 storeGraphJSON(path);
                 storeVarInFile("examples/lastJSONDir", path.getParent().toString());
             }
-        });
-        pruneCheckBox.addActionListener(e -> {
-            graphViewRefreshTimer.request();
         });
         stopButton.addActionListener(e -> {
             processRefreshTimer.abort();
@@ -852,6 +848,7 @@ public class BasicUI {
     }
 
     private void storeMethodHandlerPropString(String props) {
+        storeVarInFile("examples/lastMHProps", props);
         if (!getExampleMethodHandlerPropStrings().contains(props)) {
             List<String> ownProps = new ArrayList<>(Arrays.asList(getVarContent("examples/mhprops", "").split("\n")));
             ownProps.add(props);

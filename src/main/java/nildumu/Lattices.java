@@ -705,34 +705,6 @@ public class Lattices {
             return BIT_LATTICE;
         }
 
-        public void walkTopologicalOrder(Bit startBit, Consumer<Bit> consumer, Predicate<Bit> ignoreBit, Set<Bit> alreadyVisitedBits){
-            List<Bit> bits = new ArrayList<>();
-            walkBits(startBit, bits::add, ignoreBit, new AbstractSet<Bit>() {
-                @Override
-                public Iterator<Bit> iterator() {
-                    return Collections.emptyIterator();
-                }
-
-                @Override
-                public int size() {
-                    return 0;
-                }
-
-                @Override
-                public boolean add(Bit bit) {
-                    return false;
-                }
-            });
-            for (int i = bits.size() - 1; i >= 0; i--){
-                Bit bit = bits.get(i);
-                if (alreadyVisitedBits.contains(bit)){
-                    continue;
-                }
-                alreadyVisitedBits.add(bit);
-                consumer.accept(bit);
-            }
-        }
-
         public void walkBits(Bit startBit, Consumer<Bit> consumer, Predicate<Bit> ignoreBit){
             walkBits(startBit, consumer, ignoreBit, new HashSet<>());
         }
@@ -947,6 +919,8 @@ public class Lattices {
 
     public static class ValueLattice implements Lattice<Value> {
 
+        int bitWidth = Integer.MAX_VALUE;
+
         private static final ValueLattice lattice = new ValueLattice();
 
         private static final Value BOT = ValueLattice.get().parse("0bxx");
@@ -1019,7 +993,7 @@ public class Lattices {
          * Ensures the equal length of both values before they are passed to the consumer
          */
         public void apply(Value a, Value b, BiConsumer<Value, Value> consumer) {
-            int size = Math.max(a.size(), b.size());
+            int size = Math.min(Math.max(a.size(), b.size()), bitWidth);
             consumer.accept(a.extend(size), b.extend(size));
         }
 
@@ -1027,7 +1001,7 @@ public class Lattices {
          * Ensures the equal length of both values before they are passed to the transformer
          */
         public <R> R map(Value a, Value b, BiFunction<Value, Value, R> transformer) {
-            int size = Math.max(a.size(), b.size());
+            int size = Math.min(Math.max(a.size(), b.size()), bitWidth);
             return transformer.apply(a.extend(size), b.extend(size));
         }
 
@@ -1044,6 +1018,16 @@ public class Lattices {
 
         public String toString(Value elem) {
             return elem.toString();
+        }
+
+        public void walkBits(Value value, Consumer<Bit> consumer){
+            Set<Bit> alreadyVisited = new HashSet<>();
+            value.forEach(b -> bl.walkBits(b, consumer, c -> false, alreadyVisited));
+        }
+
+        public void walkBits(List<Value> values, Consumer<Bit> consumer){
+            Set<Bit> alreadyVisited = new HashSet<>();
+            values.forEach(v -> v.forEach(b -> bl.walkBits(b, consumer, c -> false, alreadyVisited)));
         }
     }
 
@@ -1076,6 +1060,9 @@ public class Lattices {
             Bit signBit = newBits.get(newBits.size() - 1);
             for (int i = newBits.size(); i < resultBitWidth; i++){
                 newBits.add(signBit);
+            }
+            while (newBits.size() > resultBitWidth){
+                newBits.remove(newBits.size() - 1);
             }
             return newBits;
         }

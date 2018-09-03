@@ -161,7 +161,7 @@ public class LoopTests {
     @ValueSource(ints = {1, 2, 10, 100})
     public void testBasicLoop4_condensed2(int secretSize){
         assertTimeoutPreemptively(ofMillis(1000000), () ->
-                parse("bit_width 2;\n" +
+                parse(String.format("bit_width %d;\n", secretSize) +
                         String.format("h input int h = 0b%s;\n", iter("u", secretSize)) +
                         "l input int l = 0bu;\n" +
                         "while (l){\n" +

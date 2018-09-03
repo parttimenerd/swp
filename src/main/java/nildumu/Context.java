@@ -1,10 +1,8 @@
 package nildumu;
 
-import com.sun.istack.internal.logging.Logger;
-
 import java.util.*;
 import java.util.function.*;
-import java.util.logging.Level;
+import java.util.logging.*;
 import java.util.stream.*;
 
 import swp.util.Pair;
@@ -41,17 +39,6 @@ public class Context {
         }
     }
 
-    /**
-     * Overapproximation computation mode for the approximation of functions without calling them
-     */
-    public static enum MethodBotMode {
-        /**
-         * Simple call-string based version, that uses the trivial overapproximation if it
-         * cannot analyze a function
-         */
-        BASIC
-    }
-
     public static class NotAnInputBit extends NildumuError {
         NotAnInputBit(Bit offendingBit, String reason){
             super(String.format("%s is not an input bit: %s", offendingBit.repr(), reason));
@@ -68,7 +55,7 @@ public class Context {
         }
     }
 
-    public static final Logger LOG = Logger.getLogger("Analysis", Context.class);
+    public static final Logger LOG = Logger.getLogger("Analysis");
     static {
         LOG.setLevel(Level.FINEST);
     }
@@ -195,23 +182,13 @@ public class Context {
 
     private NodeValueState nodeValueState = nodeValueStates.get(currentCallPath);
 
-    private final DefaultMap<Bit, Integer> c1LeakageMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, Integer>() {
-        @Override
-        public Integer defaultValue(Map<Bit, Integer> map, Bit key) {
-            if (isInputBit(key) && sec(key) != sl.bot()){
-                return 1;
-            }
-            return key.deps.stream().filter(Bit::isUnknown).mapToInt(c1LeakageMap::get).sum();
-        }
-    });
-
     private Mode mode;
 
     /*-------------------------- extended mode specific -------------------------------*/
 
     public final Stack<Mods> modsStack = new Stack<>();
 
-    private final DefaultMap<Bit, ModsCreator> replMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, ModsCreator>() {
+    private final DefaultMap<Bit, ModsCreator> replMap = new DefaultMap<>(new WeakHashMap<>(), new DefaultMap.Extension<Bit, ModsCreator>() {
         @Override
         public ModsCreator defaultValue(Map<Bit, ModsCreator> map, Bit key) {
             return ((c, b, a) -> choose(b, a) == a ? new Mods(b, a) : Mods.empty());
@@ -220,14 +197,7 @@ public class Context {
 
     /*-------------------------- loop mode specific -------------------------------*/
 
-    private final DefaultMap<Bit, Set<Bit>> bitVersionsMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, Set<Bit>>() {
-        @Override
-        public Set<Bit> defaultValue(Map<Bit, Set<Bit>> map, Bit key) {
-            return Collections.singleton(key);
-        }
-    });
-
-    private final DefaultMap<Bit, Integer> weightMap = new DefaultMap<>(new HashMap<>(), new DefaultMap.Extension<Bit, Integer>() {
+    private final DefaultMap<Bit, Integer> weightMap = new DefaultMap<>(new WeakHashMap<>(), new DefaultMap.Extension<Bit, Integer>() {
         @Override
         public Integer defaultValue(Map<Bit, Integer> map, Bit key) {
             return 1;
@@ -246,6 +216,7 @@ public class Context {
         this.sl = sl;
         this.maxBitWidth = maxBitWidth;
         this.variableStates.push(new State());
+        ValueLattice.get().bitWidth = maxBitWidth;
     }
 
     public static B v(Bit bit) {
@@ -359,7 +330,7 @@ public class Context {
         }).collect(Collectors.toList());
     }
 
-    final Map<MJNode, List<Integer>> lastParamVersions = new HashMap<>();
+    private final Map<MJNode, List<Integer>> lastParamVersions = new HashMap<>();
 
     private boolean compareAndStoreParamVersion(MJNode node){
         List<Integer> curVersions = paramNode(node).stream().map(nodeValueState.nodeVersionMap::get).collect(Collectors.toList());
@@ -577,7 +548,20 @@ public class Context {
     }
 
     public int c1(Bit bit){
-        return c1LeakageMap.get(bit);
+        return c1(bit, new HashSet<>());
+    }
+
+    private int c1(Bit bit, Set<Bit> alreadyVisitedBits){
+        if (isInputBit(bit) && sec(bit) != sl.bot()){
+            return 1;
+        }
+        return bit.deps.stream().filter(Bit::isUnknown).filter(b -> {
+            if (alreadyVisitedBits.contains(b)) {
+                return false;
+            }
+            alreadyVisitedBits.add(b);
+            return true;
+        }).mapToInt(b -> c1(b, alreadyVisitedBits)).sum();
     }
 
     public Bit choose(Bit a, Bit b){
@@ -596,14 +580,6 @@ public class Context {
 
     /* -------------------------- loop mode specific -------------------------------*/
 
-    public Set<Bit> bitVersions(Bit bit){
-        return bitVersionsMap.get(bit);
-    }
-
-    public void bitVersions(Bit bit, Set<Bit> versions){
-        bitVersionsMap.put(bit, versions);
-    }
-
     public int weight(Bit bit){
         return weightMap.get(bit);
     }
@@ -615,22 +591,6 @@ public class Context {
 
     public boolean hasInfiniteWeight(Bit bit){
         return weight(bit) == INFTY;
-    }
-
-    DependencySet gatherControlDependencies(Bit bit){
-        Queue<Bit> q = new ArrayDeque<>();
-        Set<Bit> alreadyVisited = new HashSet<>();
-        Set<Bit> controlDeps = new HashSet<>();
-        q.add(bit);
-        while (!q.isEmpty()){
-            Bit cur = q.poll();
-            if (c(cur).size() > 0){
-                controlDeps.addAll(c(cur));
-            } else {
-                q.addAll(cur.deps);
-            }
-        }
-        return ds.create(controlDeps);
     }
 
     /**
@@ -655,42 +615,6 @@ public class Context {
             return Mods.empty().add(oMods).overwrite(nMods);
         });
         return true;
-    }
-
-    DependencySet directDependencies(Bit bit){
-        return ds.sup(d(bit), c(bit));
-    }
-
-    public boolean sim(Bit o, Bit m){
-        if (v(o) != v(m)){    // the bit value changed
-            return false;
-        }
-        if (o.valueEquals(m)){ // the dependencies are all equal
-            return true;
-        }
-        Queue<Bit> q = new ArrayDeque<>();
-        Set<Bit> alreadyVisited = new HashSet<>();
-        Set<Bit> oldDeps = directDependencies(o);
-        Set<Bit> anchorBits = oldDeps.stream().map(this::bitVersions).flatMap(Set::stream).collect(Collectors.toSet());
-        q.add(m);
-        while (!q.isEmpty()){
-            Bit x = q.poll();
-            if (alreadyVisited.contains(x)){
-                continue;
-            }
-            alreadyVisited.add(x);
-            if (!x.isConstant() && !anchorBits.contains(x)){
-                if (directDependencies(x).isEmpty()){
-                    return false;
-                }
-                directDependencies(x).stream().filter(y -> !alreadyVisited.contains(y)).forEach(q::add);
-            }
-        }
-        return true;
-    }
-
-    public long getNodeValueUpdateCount(){
-        return nodeValueState.nodeValueUpdateCount;
     }
 
     public void setReturnValue(Value value){
