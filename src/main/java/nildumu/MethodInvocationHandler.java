@@ -15,6 +15,7 @@ import static nildumu.Lattices.*;
 import static nildumu.LeakageCalculation.*;
 import static nildumu.Parser.*;
 import static nildumu.Util.p;
+import static nildumu.CallGraph.*;
 
 /**
  * Handles the analysis of methods
@@ -150,6 +151,8 @@ public abstract class MethodInvocationHandler {
 
         final Value returnValue;
 
+        final List<Integer> paramBitsPerReturnValue;
+
         BitGraph(Context context, List<Value> parameters, Value returnValue) {
             this.context = context;
             this.parameters = parameters;
@@ -163,6 +166,7 @@ public abstract class MethodInvocationHandler {
             }
             this.returnValue = returnValue;
             assertThatAllBitsAreNotNull();
+            paramBitsPerReturnValue = returnValue.stream().map(b -> calcReachableParamBits(b).size()).collect(Collectors.toList());
         }
 
         private void assertThatAllBitsAreNotNull(){
@@ -235,7 +239,7 @@ public abstract class MethodInvocationHandler {
                 if (bits.contains(b)){
                     reachableBits.add(b);
                 }
-            }, b -> bits.contains(b) || parameterBits.contains(b));
+            }, b -> false);
             return reachableBits;
         }
 
@@ -300,8 +304,8 @@ public abstract class MethodInvocationHandler {
             return dotGraph;
         }
 
-        public void writeDotGraph(Path folder, String name, int version){
-            Path path = folder.resolve(name + "_" + version + ".dot");
+        public void writeDotGraph(Path folder, String name){
+            Path path = folder.resolve(name + ".dot");
             String graph = createDotGraph(name).render();
             try {
                 Files.createDirectories(folder);
@@ -310,11 +314,30 @@ public abstract class MethodInvocationHandler {
                 e.printStackTrace();
             }
         }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof BitGraph){
+                //assert ((BitGraph)obj).parameterBits == this.parameterBits;
+                return paramBitsPerReturnValue.equals(((BitGraph)obj).paramBitsPerReturnValue);
+            }
+            return false;
+        }
     }
 
     public static class SummaryHandler extends MethodInvocationHandler {
 
+        public static enum Mode {
+            COINDUCTION,
+            /**
+             * The induction mode doesn't work with recursion and has spurious errors
+             */
+            INDUCTION
+        }
+
         final int maxIterations;
+
+        final Mode mode;
 
         final MethodInvocationHandler botHandler;
 
@@ -322,47 +345,74 @@ public abstract class MethodInvocationHandler {
 
         Map<MethodNode, BitGraph> methodGraphs;
 
-        public SummaryHandler(int maxIterations, MethodInvocationHandler botHandler, Path dotFolder) {
+        CallGraph callGraph;
+
+        public SummaryHandler(int maxIterations, Mode mode, MethodInvocationHandler botHandler, Path dotFolder) {
             this.maxIterations = maxIterations;
+            this.mode = mode;
+            assert !(mode == Mode.INDUCTION) || (maxIterations == Integer.MAX_VALUE);
             this.botHandler = botHandler;
             this.dotFolder = dotFolder;
         }
 
         @Override
         public void setup(ProgramNode program) {
+            callGraph = new CallGraph(program);
+            if (dotFolder != null){
+                callGraph.writeDotGraph(dotFolder, "call_graph");
+            }
+            if (callGraph.containsRecursion() && mode == Mode.INDUCTION){
+                throw new MethodInvocationHandlerInitializationError("Induction cannot be used for programs with reduction");
+            }
             Context c = program.context;
             Map<MethodNode, MethodInvocationNode> callSites = new DefaultMap<>((map, method) ->{
                 MethodInvocationNode callSite = new MethodInvocationNode(method.location, method.name, null);
                 callSite.definition = method;
                 return callSite;
             });
-            Map<MethodNode, BitGraph> curVersion = new HashMap<>();
-            program.methods().forEach(m -> {
-                List<Value> parameters = generateParameters(program, m);
-                Value returnValue = botHandler.analyze(c, callSites.get(m), parameters);
-                curVersion.put(m, new BitGraph(c, parameters, returnValue));
-            });
-            outputDots(curVersion, 0);
-            MethodInvocationHandler handler = createHandler(curVersion);
-            for (int i = 0; i < maxIterations; i++) {
-                for (MethodNode method : program.methods()) {
-                    curVersion.put(method, methodIteration(program.context, callSites.get(method), handler, curVersion.get(method).parameters));
+            Map<CallNode, BitGraph> state = new HashMap<>();
+            MethodInvocationHandler handler = createHandler(m -> state.get(callGraph.callNode(m)));
+            Map<CallNode, Integer> nodeEvaluationCount = new HashMap<>();
+            Util.Box<Integer> iteration = new Util.Box<>(0);
+            methodGraphs = callGraph.worklist((node, s) -> {
+                if (node.isMainNode || nodeEvaluationCount.getOrDefault(node, 0) > maxIterations){
+                    return s.get(node);
                 }
-                outputDots(curVersion, i + 1);
-            }
-            methodGraphs = curVersion;
+                nodeEvaluationCount.put(node, nodeEvaluationCount.getOrDefault(node, 0));
+                iteration.val += 1;
+                BitGraph graph = methodIteration(program.context, callSites.get(node.method), handler, s.get(node).parameters);
+                if (dotFolder != null) {
+                    graph.writeDotGraph(dotFolder, iteration.val + "_" + node.method.name);
+                }
+                return graph;
+            }, node ->  {
+                BitGraph graph = bot(program, node.method, callSites);
+                        if (dotFolder != null) {
+                            graph.writeDotGraph(dotFolder, iteration.val + "_" + node.method.name);
+                        }
+                        return graph;
+                    }
+            , node -> node.getCallers().stream().filter(n -> !n.isMainNode).collect(Collectors.toSet()),
+            state).entrySet().stream().collect(Collectors.toMap(e -> e.getKey().method, Map.Entry::getValue));
         }
 
-        void outputDots(Map<MethodNode, BitGraph> curVersion, int version){
-            if (dotFolder != null){
-                curVersion.entrySet().forEach(e -> e.getValue().writeDotGraph(dotFolder, e.getKey().name, version));
+        BitGraph bot(ProgramNode program, MethodNode method, Map<MethodNode, MethodInvocationNode> callSites){
+            List<Value> parameters = generateParameters(program, method);
+            if (mode == Mode.COINDUCTION) {
+                Value returnValue = botHandler.analyze(program.context, callSites.get(method), parameters);
+                return new BitGraph(program.context, parameters, returnValue);
             }
+            return new BitGraph(program.context, parameters, createUnknownValue(program));
         }
 
         List<Value> generateParameters(ProgramNode program, MethodNode method){
             return method.parameters.parameterNodes.stream().map(p ->
-                IntStream.range(0, program.context.maxBitWidth).mapToObj(i -> bl.create(U)).collect(Value.collector())
+                createUnknownValue(program)
             ).collect(Collectors.toList());
+        }
+
+        Value createUnknownValue(ProgramNode program){
+            return IntStream.range(0, program.context.maxBitWidth).mapToObj(i -> bl.create(U)).collect(Value.collector());
         }
 
         BitGraph methodIteration(Context c, MethodInvocationNode callSite, MethodInvocationHandler handler, List<Value> parameters){
@@ -377,11 +427,11 @@ public abstract class MethodInvocationHandler {
             return new BitGraph(c, parameters, ret);
         }
 
-        MethodInvocationHandler createHandler(Map<MethodNode, BitGraph> curVersions){
+        MethodInvocationHandler createHandler(Function<MethodNode, BitGraph> curVersion){
             return new MethodInvocationHandler() {
                 @Override
                 public Value analyze(Context c, MethodInvocationNode callSite, List<Value> arguments) {
-                    return curVersions.get(callSite.definition).applyToArgs(c, arguments);
+                    return curVersion.apply(callSite.definition).applyToArgs(c, arguments);
                 }
             };
         }
@@ -406,8 +456,8 @@ public abstract class MethodInvocationHandler {
 
     public static class SummaryMinCutHandler extends SummaryHandler {
 
-        public SummaryMinCutHandler(int maxIterations, MethodInvocationHandler botHandler, Path dotFolder) {
-            super(maxIterations, botHandler, dotFolder);
+        public SummaryMinCutHandler(int maxIterations, Mode mode, MethodInvocationHandler botHandler, Path dotFolder) {
+            super(maxIterations, mode, botHandler, dotFolder);
         }
 
         @Override
@@ -454,16 +504,19 @@ public abstract class MethodInvocationHandler {
             return new CallStringHandler(Integer.parseInt(ps.getProperty("maxrec")), parse(ps.getProperty("bot")));
         });
         examplePropLines.add("handler=call_string;maxrec=2;bot=basic");
-        register("summary", s -> s.add("maxiter", "1").add("bot", "basic").add("dot", ""), ps -> {
+        Consumer<PropertyScheme> propSchemeCreator = s -> s.add("maxiter", "1").add("bot", "basic").add("dot", "").add("mode", "coind");
+        register("summary", propSchemeCreator, ps -> {
             Path dotFolder = ps.getProperty("dot").equals("") ? null : Paths.get(ps.getProperty("dot"));
-            return new SummaryHandler(Integer.parseInt(ps.getProperty("maxiter")), parse(ps.getProperty("bot")), dotFolder);
+            return new SummaryHandler(ps.getProperty("mode").equals("coind") ? Integer.parseInt(ps.getProperty("maxiter")) : Integer.MAX_VALUE, ps.getProperty("mode").equals("ind") ? SummaryHandler.Mode.INDUCTION : SummaryHandler.Mode.COINDUCTION, parse(ps.getProperty("bot")), dotFolder);
         });
         examplePropLines.add("handler=summary;maxiter=2;bot=basic");
-        register("summary_mc", s -> s.add("maxiter", "1").add("bot", "basic").add("dot", ""), ps -> {
+        //examplePropLines.add("handler=summary;mode=ind");
+        register("summary_mc", propSchemeCreator, ps -> {
             Path dotFolder = ps.getProperty("dot").equals("") ? null : Paths.get(ps.getProperty("dot"));
-            return new SummaryHandler(Integer.parseInt(ps.getProperty("maxiter")), parse(ps.getProperty("bot")), dotFolder);
+            return new SummaryMinCutHandler(ps.getProperty("mode").equals("coind") ? Integer.parseInt(ps.getProperty("maxiter")) : Integer.MAX_VALUE, ps.getProperty("mode").equals("ind") ? SummaryHandler.Mode.INDUCTION : SummaryHandler.Mode.COINDUCTION, parse(ps.getProperty("bot")), dotFolder);
         });
         examplePropLines.add("handler=summary_mc;maxiter=2;bot=basic");
+        //examplePropLines.add("handler=summary_mc;mode=ind");
     }
 
     public static MethodInvocationHandler createDefault(){

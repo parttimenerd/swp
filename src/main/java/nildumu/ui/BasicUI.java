@@ -366,8 +366,10 @@ public class BasicUI {
             }
         });
         stopButton.addActionListener(e -> {
-            processRefreshTimer.abort();
-            graphViewRefreshTimer.abort();
+            if (processRefreshTimer != null) {
+                processRefreshTimer.abort();
+                graphViewRefreshTimer.abort();
+            }
         });
         runButton.addActionListener(e -> {
             new Thread(() -> {

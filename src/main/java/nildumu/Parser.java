@@ -945,7 +945,7 @@ public class Parser implements Serializable {
 
         @Override
         public String toString() {
-            return String.format("int %s (%s): %s", name, parameters, body);
+            return String.format("int %s (%s)", name, parameters);
         }
 
         @Override

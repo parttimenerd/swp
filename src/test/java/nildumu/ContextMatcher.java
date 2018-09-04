@@ -111,7 +111,7 @@ public class ContextMatcher {
         }
 
         public LeakageMatcher leaksAtLeast(Lattices.Sec sec, int leakage) {
-            builder.add(() -> assertTrue(graph.leakage(sec) >= leakage, String.format("The calculated leakage for an attacker of level %s should be at least %d, leaking %s", sec, leakage, graph.minCutBits(sec).stream().map(Lattices.Bit::toString).collect(Collectors.joining(", ")))));
+            builder.add(() -> assertTrue(graph.leakage(sec) >= leakage, String.format("The calculated leakage for an attacker of level %s should be at least %d, leaking %d", sec, leakage, graph.leakage(sec))));
             return this;
         }
     }

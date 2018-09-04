@@ -1,5 +1,6 @@
 package nildumu;
 
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.logging.Level;
 import java.util.stream.*;
@@ -10,7 +11,8 @@ import org.junit.jupiter.params.provider.*;
 
 import static java.time.Duration.ofSeconds;
 import static nildumu.Processor.process;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.junit.jupiter.api.Assertions.*;
+import static nildumu.Parser.*;
 
 public class FunctionTests {
 
@@ -156,6 +158,7 @@ l output int o = fib(h);
      */
     @ParameterizedTest
     @MethodSource("handlers")
+    //@ValueSource(strings = {"handler=summary;mode=ind;dot=tmp2"})
     public void testNestedMethodCalls(String handler){
         parse("int f(int x) {\n" +
                 "\t    return g(x);\n" +
@@ -166,6 +169,28 @@ l output int o = fib(h);
                 "    int h(int x) {\n" +
                 "\t    return x;\n" +
                 "    }\n" +
+                "    high input int h = 0buu;\n" +
+                "    low output int o = f(h);", handler).leaksAtLeast(2).run();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlers")
+    //@ValueSource(strings = {"handler=summary;mode=ind;dot=tmp2"})
+    public void testNestedMethodCalls_smaller(String handler){
+        parse("int f(int x) {\n" +
+                "\t    return x;\n" +
+                "    }\n" +
+                "    high input int h = 0buu;\n" +
+                "    low output int o = f(h);", handler).leaksAtLeast(2).run();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlers")
+    //@ValueSource(strings = {"handler=summary;mode=ind;dot=tmp2"})
+    public void testNestedMethodCalls_smaller2(String handler){
+        parse("int f(int x) {\n" +
+                "\t    return h(x);\n" +
+                "    } int h(int x){ return x }\n" +
                 "    high input int h = 0buu;\n" +
                 "    low output int o = f(h);", handler).leaksAtLeast(2).run();
     }
@@ -204,14 +229,38 @@ l output int o = fib(h);
                 "    low output int o = f(h, 0, 0, 0, 0, 4);", handler).leaksAtLeast(3).run();
     }
 
+    @Test
+    public void testCallGraphGeneration(){
+        ProgramNode program = Parser.process("int bla(){return bla()} bla()");
+        MethodNode blaMethod = program.getMethod("bla");
+        CallGraph g = new CallGraph(program);
+        g.writeDotGraph(Paths.get("tmp"), "call_graph");
+        assertAll(
+                () -> assertEquals(1, g.loopDepth(blaMethod), "Wrong loop depth for bla()"),
+                () -> assertTrue(g.dominators(blaMethod).contains(blaMethod), "bla() dominates itself")
+        );
+    }
+
+    @Test
+    public void testMoreComplexCallGraphGeneration(){
+        ProgramNode program = Parser.process("int f() { g(); z ()} int g(){ h(); g(); f() } int h(){ g() } int z(){} f()");
+        MethodNode blaMethod = program.getMethod("bla");
+        CallGraph g = new CallGraph(program);
+        g.writeDotGraph(Paths.get("tmp"), "call_graph2");
+        assertAll(
+                () -> assertEquals(2, g.loopDepth(program.getMethod("h")), "Wrong loop depth for h"),
+                () -> assertTrue(g.dominators(program.getMethod("h")).contains(program.getMethod("f")), "f() dominates h()")
+        );
+    }
+
     public static void main(String[] args){
         //Context.LOG.setLevel(Level.INFO);
         String program = "bit_width 2;\n" +
 "int f(int a){\n" +
 "	return f(((1 ^ a) ^ 1));\n" +
-"}\n" ;
+"} f(1)" ;
         System.err.println(Parser.process(program).toPrettyString());
-       parse(program, MethodInvocationHandler.parse("handler=summary;maxiter=3;bot=basic;dot=dots"));
+       parse(program, MethodInvocationHandler.parse("handler=summary;mode=ind;bot=basic;dot=dots"));
     }
 
     static ContextMatcher parse(String program){
