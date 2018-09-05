@@ -142,7 +142,7 @@ public class ContextMatcher {
     public ContextMatcher bit(String varAndIndex, String val){
         String var = varAndIndex.split("\\[")[0];
         int i = Integer.parseInt(varAndIndex.split("\\[")[1].split("\\]")[0]);
-        builder.add(() -> Assertions.assertEquals(bs.parse(val), context.getVariableValue(var).get(i).val, String.format("%s should have the bit val %s", varAndIndex, val)));
+        builder.add(() -> Assertions.assertEquals(bs.parse(val), context.getVariableValue(var).get(i).val(), String.format("%s should have the bit val %s", varAndIndex, val)));
         return this;
     }
 
@@ -154,7 +154,7 @@ public class ContextMatcher {
         }
 
         public ValueMatcher bit(int i, Lattices.B val){
-            builder.add(() -> Assertions.assertEquals(val, value.get(i).val, String.format("The %dth bit of %s should have the bit val %s", i, value, val)));
+            builder.add(() -> Assertions.assertEquals(val, value.get(i).val(), String.format("The %dth bit of %s should have the bit val %s", i, value, val)));
             return this;
         }
     }

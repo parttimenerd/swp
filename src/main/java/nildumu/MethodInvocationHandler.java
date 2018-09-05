@@ -103,7 +103,7 @@ public abstract class MethodInvocationHandler {
             if (!allowAnyProps) {
                 for (String prop : properties.stringPropertyNames()) {
                     if (!defaultValues.containsKey(prop)) {
-                        throw new MethodInvocationHandlerInitializationError(String.format("for string \"%s\": property %s unknown", props, prop));
+                        throw new MethodInvocationHandlerInitializationError(String.format("for string \"%s\": property %s unknown, valid properties are: %s", props, prop, defaultValues.keySet().stream().sorted().collect(Collectors.joining(", "))));
                     }
                 }
             }
@@ -190,10 +190,10 @@ public abstract class MethodInvocationHandler {
             });
         }
 
-        public static Bit cloneBit(Context context, Bit bit, DependencySet dataDeps, DependencySet controlDeps){
+        public static Bit cloneBit(Context context, Bit bit, DependencySet deps){
             Bit clone;
             if (bit.isUnknown()) {
-                clone = bl.create(U, dataDeps, controlDeps);
+                clone = bl.create(U, deps);
             } else {
                 clone = bl.create(v(bit));
             }
@@ -202,7 +202,7 @@ public abstract class MethodInvocationHandler {
         }
 
         public Value applyToArgs(Context context, List<Value> arguments){
-            List<Value> extendedArguments = IntStream.range(0, arguments.size()).mapToObj(i -> arguments.get(i).extend(parameters.get(i).size())).collect(Collectors.toList());
+            List<Value> extendedArguments = arguments;
             Map<Bit, Bit> newBits = new HashMap<>();
             // populate
             vl.walkBits(returnValue, bit -> {
@@ -211,7 +211,7 @@ public abstract class MethodInvocationHandler {
                     Bit argBit = extendedArguments.get(loc.first).get(loc.second);
                     newBits.put(bit, argBit);
                 } else {
-                    Bit clone = cloneBit(context, bit, d(bit), c(bit));
+                    Bit clone = cloneBit(context, bit, d(bit));
                     clone.value(bit.value());
                     newBits.put(bit, clone);
                 }
@@ -232,7 +232,7 @@ public abstract class MethodInvocationHandler {
             // update dependencies
             newBits.forEach((old, b) -> {
                 if (!parameterBits.contains(old)) {
-                    b.setDeps(d(b).map(newBits::get), c(b).map(newBits::get));
+                    b.alterDependencies(newBits::get);
                 }
                 //b.value(old.value());
             });
@@ -257,7 +257,7 @@ public abstract class MethodInvocationHandler {
         }
 
         public Set<Bit> minCutBits(){
-            return minCutBits(new HashSet<>(returnValue.bits), parameterBits);
+            return minCutBits(returnValue.bitSet(), parameterBits);
         }
 
         public Set<Bit> minCutBits(Set<Bit> outputBits, Set<Bit> inputBits){
@@ -297,7 +297,7 @@ public abstract class MethodInvocationHandler {
                 bl.walkBits(bit, b -> {
                     DotGraph.Node node = g.addNode(b.uniqueId());
                     node.setLabel(dotLabel.apply(b));
-                    b.deps.forEach(d -> g.addAssociation(b.uniqueId(), d.uniqueId()));
+                    b.deps().forEach(d -> g.addAssociation(b.uniqueId(), d.uniqueId()));
                 }, b -> false, alreadyVisited);
             }
             vl.walkBits(parameters, b -> {
@@ -461,7 +461,7 @@ public abstract class MethodInvocationHandler {
          */
         BitGraph reduce(Context context, BitGraph bitGraph){
             DefaultMap<Bit, Bit> newBits = new DefaultMap<Bit, Bit>((map, bit) -> {
-               return BitGraph.cloneBit(context, bit, ds.create(bitGraph.calcReachableParamBits(bit)), ds.bot());
+               return BitGraph.cloneBit(context, bit, ds.create(bitGraph.calcReachableParamBits(bit)));
             });
             Value ret = bitGraph.returnValue.map(newBits::get);
             ret.node(bitGraph.returnValue.node());
@@ -491,7 +491,7 @@ public abstract class MethodInvocationHandler {
             Set<Bit> anchorBits = new HashSet<>(bitGraph.parameterBits);
             Map<Pair<Set<Bit>, Set<Bit>>, Set<Bit>> outInMincut = new HashMap<>();
             Function<Pair<Set<Bit>, Set<Bit>>, Set<Bit>> calcMinCut = p -> bitGraph.minCutBits(p.first, p.second);
-            Pair<Set<Bit>, Set<Bit>> initialPair = p(new HashSet<>(bitGraph.returnValue.bits), bitGraph.parameterBits);
+            Pair<Set<Bit>, Set<Bit>> initialPair = p(bitGraph.returnValue.bitSet(), bitGraph.parameterBits);
             outInMincut.put(initialPair, calcMinCut.apply(initialPair));
             Set<Bit> minCutBits = new HashSet<>();
             for (int i = 0; i < minCuts; i++) {
@@ -508,17 +508,17 @@ public abstract class MethodInvocationHandler {
             // create the new bits
             Stream.concat(bitGraph.returnValue.stream(), minCutBits.stream()).forEach(b -> {
                 Set<Bit> reachable = bitGraph.calcReachableBits(b, anchorBits);
-                if (!b.deps.contains(b)){
+                if (!b.deps().contains(b)){
                     reachable.remove(b);
                 }
-                Bit newB = BitGraph.cloneBit(context, b, ds.create(reachable), ds.bot());
+                Bit newB = BitGraph.cloneBit(context, b, ds.create(reachable));
                 newB.value(b.value());
                 newBits.put(b, newB);
             });
             bitGraph.parameterBits.forEach(b -> newBits.put(b, b));
             // update the control dependencies
             newBits.forEach((o, b) -> {
-                b.setDeps(b.dataDeps.map(newBits::get), ds.bot());
+                b.alterDependencies(newBits::get);
             });
             Value ret = bitGraph.returnValue.map(newBits::get);
             ret.node(bitGraph.returnValue.node());
@@ -534,7 +534,7 @@ public abstract class MethodInvocationHandler {
                     return vl.bot();
                 }
                 DependencySet set = arguments.stream().flatMap(Value::stream).collect(DependencySet.collector());
-                return IntStream.range(0, arguments.stream().mapToInt(Value::size).max().getAsInt()).mapToObj(i -> bl.create(U, set, ds.bot())).collect(Value.collector());
+                return IntStream.range(0, arguments.stream().mapToInt(Value::size).max().getAsInt()).mapToObj(i -> bl.create(U, set)).collect(Value.collector());
             }
         });
         examplePropLines.add("handler=basic");

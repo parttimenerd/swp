@@ -50,7 +50,7 @@ public class IOValues {
     }
 
     private void add(Bit bit){
-        if (bit.val == B.U){
+        if (bit.val() == B.U){
             bits.add(bit);
         }
     }

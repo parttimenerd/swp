@@ -159,7 +159,7 @@ public interface Operator {
                 return Mods.empty();
             }
             Mods mods = null;
-            switch (a.val) {
+            switch (a.val()) {
                 case ONE:
                     mods = assumeOne(c, r, a);
                     break;
@@ -212,6 +212,8 @@ public interface Operator {
      * <li>computation of the dependencies → automatic computation of the security level and the control dependencies</li>
      * <li>computation of the bit modifications</li>
      * </ol>
+     *
+     * <b>Only usable for operators that don't add control dependencies</b>
      */
     public static abstract class BitWiseBinaryOperatorStructured extends BitWiseBinaryOperator {
 
@@ -226,8 +228,7 @@ public interface Operator {
                 return bl.create(bitValue);
             }
             DependencySet dataDeps = computeDataDependencies(x, y, bitValue);
-            DependencySet controlDeps = computeControlDeps(c, currentNode, bitValue, dataDeps);
-            Bit r = bl.create(bitValue, dataDeps, controlDeps);
+            Bit r = bl.create(bitValue, dataDeps);
             c.repl(r, computeModificator(x, y, r, dataDeps));
             return r;
         }
@@ -235,10 +236,6 @@ public interface Operator {
         abstract B computeBitValue(Bit x, Bit y);
 
         abstract DependencySet computeDataDependencies(Bit x, Bit y, B computedBitValue);
-
-        DependencySet computeControlDeps(Context c, Parser.MJNode node, Lattices.B computedBitValue, DependencySet computedDataDeps) {
-            return DependencySetLattice.get().bot();
-        }
 
         abstract Context.ModsCreator computeModificator(Bit x, Bit y, Bit r, DependencySet dataDeps);
     }
@@ -257,8 +254,7 @@ public interface Operator {
         public Value compute(Context c, Parser.MJNode node, List<Value> values) {
             currentNode = node;
             int maxWidth = values.stream().mapToInt(Value::size).max().getAsInt();
-            List<Value> extendedValues = values.stream().map(v -> v.extend(maxWidth)).collect(Collectors.toList());
-            return IntStream.range(1, extendedValues.size() + 1).mapToObj(i -> computeBit(c, extendedValues.stream().map(v -> v.get(i)).collect(Collectors.toList()))).collect(Value.collector());
+            return IntStream.range(1, values.size() + 1).mapToObj(i -> computeBit(c, values.stream().map(v -> v.get(i)).collect(Collectors.toList()))).collect(Value.collector());
         }
 
         abstract Bit computeBit(Context c, List<Bit> bits);
@@ -277,6 +273,7 @@ public interface Operator {
      * <li>computation of the dependencies → automatic computation of the security level and the control dependencies</li>
      * <li>computation of the bit modifications</li>
      * </ol>
+     * <b>Only usable for operators that don't add control dependencies</b>
      */
     public static abstract class BitWiseOperatorStructured extends BitWiseOperator {
         public BitWiseOperatorStructured(String symbol) {
@@ -290,8 +287,7 @@ public interface Operator {
                 return bl.create(bitValue);
             }
             DependencySet dataDeps = computeDataDependencies(bits, bitValue);
-            DependencySet controlDeps = computeControlDeps(c, currentNode, bitValue, dataDeps);
-            Bit r = bl.create(bitValue, dataDeps, controlDeps);
+            Bit r = bl.create(bitValue, dataDeps);
             c.repl(r, computeModsCreator(r, dataDeps));
             return r;
         }
@@ -299,10 +295,6 @@ public interface Operator {
         abstract B computeBitValue(List<Bit> bits);
 
         abstract DependencySet computeDataDependencies(List<Bit> bits, B computedBitValue);
-
-        DependencySet computeControlDeps(Context c, Parser.MJNode node, Lattices.B computedBitValue, DependencySet computedDataDeps) {
-            return DependencySetLattice.get().bot();
-        }
 
         abstract Context.ModsCreator computeModsCreator(Bit r, DependencySet dataDeps);
     }
@@ -317,29 +309,25 @@ public interface Operator {
         public Value compute(Context c, Value x, Value y) {
             List<B> bitValues = computeBitValues(x, y);
             List<DependencySet> dataDeps = computeDataDependencies(x, y, bitValues);
-            return x.lattice().map(x, y, (a, b) -> {
-                List<Bit> bits = new ArrayList<>();
-                for (int i = 0; i < x.size(); i++){
-                    if (bitValues.get(i).isConstant()){
-                        bits.add(bl.create(bitValues.get(i)));
-                    } else {
-                        Bit r = bl.create(bitValues.get(i), dataDeps.get(i), DependencySetLattice.get().bot());
-                        bits.add(r);
-                        c.repl(r, computeModsCreator(i + 1, r, x, y, bitValues, dataDeps.get(i)));
-                    }
+            List<Bit> bits = new ArrayList<>();
+            for (int i = 0; i < x.size(); i++){
+                if (bitValues.get(i).isConstant()){
+                    bits.add(bl.create(bitValues.get(i)));
+                } else {
+                    Bit r = bl.create(bitValues.get(i), dataDeps.get(i));
+                    bits.add(r);
+                    c.repl(r, computeModsCreator(i + 1, r, x, y, bitValues, dataDeps.get(i)));
                 }
-                return new Value(bits);
-            });
+            }
+            return new Value(bits);
         }
 
         public List<B> computeBitValues(Value x, Value y) {
-            return x.lattice().map(x, y, (a, b) -> {
-                List<B> bs = new ArrayList<>();
-                for (int i = 1; i <= x.size(); i++){
-                    bs.add(computeBitValue(i,a, b));
-                }
-                return bs;
-            });
+            List<B> bs = new ArrayList<>();
+            for (int i = 1; i <= x.size(); i++){
+                bs.add(computeBitValue(i, x, y));
+            }
+            return bs;
         }
 
         abstract B computeBitValue(int i, Value x, Value y);
@@ -360,10 +348,10 @@ public interface Operator {
 
         @Override
         public B computeBitValue(Bit x, Bit y) {
-            if (x.val == ONE || y.val == ONE) {
+            if (x.val() == ONE || y.val() == ONE) {
                 return ONE;
             }
-            if (x.val == ZERO && y.val == ZERO) {
+            if (x.val() == ZERO && y.val() == ZERO) {
                 return ZERO;
             }
             return U;
@@ -372,7 +360,7 @@ public interface Operator {
         @Override
         public DependencySet computeDataDependencies(Bit x, Bit y, Lattices.B computedBitValue) {
             return Util.permutatePair(x, y).stream()
-                    .filter(p -> p.first.val == U && p.second.val != ONE)
+                    .filter(p -> p.first.val() == U && p.second.val() != ONE)
                     .flatMap(Pair::firstStream).collect(DependencySet.collector());
         }
 
@@ -402,10 +390,10 @@ public interface Operator {
 
         @Override
         public B computeBitValue(Bit x, Bit y) {
-            if (x.val == ONE && y.val == ONE) {
+            if (x.val() == ONE && y.val() == ONE) {
                 return ONE;
             }
-            if (x.val == ZERO || y.val == ZERO) {
+            if (x.val() == ZERO || y.val() == ZERO) {
                 return ZERO;
             }
             return U;
@@ -414,7 +402,7 @@ public interface Operator {
         @Override
         public DependencySet computeDataDependencies(Bit x, Bit y, Lattices.B computedBitValue) {
             return Util.permutatePair(x, y).stream()
-                    .filter(p -> p.first.val == U && p.second.val != ZERO)
+                    .filter(p -> p.first.val() == U && p.second.val() != ZERO)
                     .flatMap(Pair::firstStream).collect(DependencySet.collector());
         }
 
@@ -444,10 +432,10 @@ public interface Operator {
 
         @Override
         public B computeBitValue(Bit x, Bit y) {
-            if (x.val != y.val && x.isConstant() && y.isConstant()) {
+            if (x.val() != y.val() && x.isConstant() && y.isConstant()) {
                 return ONE;
             }
-            if (x.val == y.val && y.isConstant()) {
+            if (x.val() == y.val() && y.isConstant()) {
                 return ZERO;
             }
             return U;
@@ -456,7 +444,7 @@ public interface Operator {
         @Override
         public DependencySet computeDataDependencies(Bit x, Bit y, Lattices.B computedBitValue) {
             return Util.permutatePair(x, y).stream()
-                    .filter(p -> p.first.val == U)
+                    .filter(p -> p.first.val() == U)
                     .flatMap(Pair::firstStream).collect(DependencySet.collector());
         }
 
@@ -495,8 +483,8 @@ public interface Operator {
         public Value compute(Context c, Value x) {
             return x.stream().map(b -> {
                 B val = v(b).neg();
-                DependencySet dataDeps = b.isConstant() ? ds.bot() : new DependencySet(b);
-                Bit r = bl.create(val, dataDeps, ds.bot());
+                DependencySet dataDeps = b.isConstant() ? ds.empty() : ds.create(b);
+                Bit r = bl.create(val, dataDeps);
                 c.repl(r, new StructuredModsCreator() {
                     @Override
                     public Mods assumeOne(Context c, Bit r, Bit a) {
@@ -524,10 +512,10 @@ public interface Operator {
             if (i > 1) {
                 return ZERO;
             }
-            if (x.lattice().mapBits(x, y, (a, b) -> a.val.equals(b.val) && a.isConstant()).stream().allMatch(Boolean::booleanValue)) {
+            if (x.lattice().mapBits(x, y, (a, b) -> a.val().equals(b.val()) && a.isConstant()).stream().allMatch(Boolean::booleanValue)) {
                 return ONE;
             }
-            if (x.lattice().mapBits(x, y, (a, b) -> !a.val.equals(b.val) && a.isConstant() && b.isConstant()).stream().anyMatch(Boolean::booleanValue)) {
+            if (x.lattice().mapBits(x, y, (a, b) -> !a.val().equals(b.val()) && a.isConstant() && b.isConstant()).stream().anyMatch(Boolean::booleanValue)) {
                 return ZERO;
             }
             return U;
@@ -536,10 +524,10 @@ public interface Operator {
         @Override
         public DependencySet computeDataDependencies(int i, Value x, Value y, List<Lattices.B> computedBitValues) {
             if (i > 1 || computedBitValues.get(0).isConstant()) {
-                return DependencySetLattice.get().bot();
+                return DependencySetLattice.get().empty();
             }
-            return Stream.concat(x.stream().filter(b -> b.val == U),
-                    y.stream().filter(b -> b.val == U)).collect(DependencySet.collector());
+            return Stream.concat(x.stream().filter(b -> b.val() == U),
+                    y.stream().filter(b -> b.val() == U)).collect(DependencySet.collector());
         }
 
         @Override
@@ -573,10 +561,10 @@ public interface Operator {
             if (i > 1) {
                 return ZERO;
             }
-            if (x.lattice().mapBits(x, y, (a, b) -> a.val.equals(b.val) && a.isConstant()).stream().allMatch(Boolean::booleanValue)) {
+            if (x.lattice().mapBits(x, y, (a, b) -> a.val().equals(b.val()) && a.isConstant()).stream().allMatch(Boolean::booleanValue)) {
                 return ZERO;
             }
-            if (x.lattice().mapBits(x, y, (a, b) -> !a.val.equals(b.val) && a.isConstant() && b.isConstant()).stream().anyMatch(Boolean::booleanValue)) {
+            if (x.lattice().mapBits(x, y, (a, b) -> !a.val().equals(b.val()) && a.isConstant() && b.isConstant()).stream().anyMatch(Boolean::booleanValue)) {
                 return ONE;
             }
             return U;
@@ -584,11 +572,14 @@ public interface Operator {
 
         @Override
         public DependencySet computeDataDependencies(int i, Value x, Value y, List<Lattices.B> computedBitValues) {
-            if (i > 1 || computedBitValues.get(0).isConstant()) {
-                return DependencySetLattice.get().bot();
+            if (i > 1) {
+                return ds.bot();
             }
-            return Stream.concat(x.stream().filter(b -> b.val == U),
-                    y.stream().filter(b -> b.val == U)).collect(DependencySet.collector());
+            if (computedBitValues.get(0).isConstant()){
+                return ds.empty();
+            }
+            return Stream.concat(x.stream().filter(b -> b.val() == U),
+                    y.stream().filter(b -> b.val() == U)).collect(DependencySet.collector());
         }
 
         @Override
@@ -624,35 +615,33 @@ public interface Operator {
             if (i > 1) {
                 return ZERO;
             }
-            return x.lattice().map(x, y, (a, b) -> {
-                Lattices.B val = U;
-                DependencySet depBits = Stream.concat(x.stream(), y.stream()).filter(Bit::isUnknown).collect(DependencySet.collector());
-                Bit a_n = a.signBit();
-                Bit b_n = b.signBit();
-                B v_x_n = a_n.val;
-                B v_y_n = b_n.val;
-                Optional<Integer> differingNonConstantIndex = firstNonMatching(a, b, (c, d) -> a.isConstant() && c == d);
-                if (v_x_n.isConstant() && v_y_n.isConstant() && v_x_n != v_y_n) {
-                    depBits = DependencySetLattice.get().bot();
-                    if (v_x_n == ONE) { // x is negative
-                        val = ONE;
-                    } else {
-                        depBits = DependencySetLattice.get().bot();
-                        val = ZERO;
-                    }
-                } else if (v_x_n == ZERO && v_y_n == ZERO && differingNonConstantIndex.isPresent() &&
-                        x.get(differingNonConstantIndex.get()).isConstant() && y.get(differingNonConstantIndex.get()).isConstant()) {
-                    val = y.get(differingNonConstantIndex.get()).val;
-                    depBits = DependencySetLattice.get().bot();
+            Lattices.B val = U;
+            DependencySet depBits = Stream.concat(x.stream(), y.stream()).filter(Bit::isUnknown).collect(DependencySet.collector());
+            Bit a_n = x.signBit();
+            Bit b_n = y.signBit();
+            B v_x_n = a_n.val();
+            B v_y_n = b_n.val();
+            Optional<Integer> differingNonConstantIndex = firstNonMatching(x, y, (c, d) -> x.isConstant() && c == d);
+            if (v_x_n.isConstant() && v_y_n.isConstant() && v_x_n != v_y_n) {
+                depBits = ds.empty();
+                if (v_x_n == ONE) { // x is negative
+                    val = ONE;
+                } else {
+                    depBits = ds.empty();
+                    val = ZERO;
                 }
-                dependentBits.push(depBits);
-                return val;
-            });
+            } else if (v_x_n == ZERO && v_y_n == ZERO && differingNonConstantIndex.isPresent() &&
+                    x.get(differingNonConstantIndex.get()).isConstant() && y.get(differingNonConstantIndex.get()).isConstant()) {
+                val = y.get(differingNonConstantIndex.get()).val();
+                depBits = ds.empty();
+            }
+            dependentBits.push(depBits);
+            return val;
         }
 
         Optional<Integer> firstNonMatching(Value x, Value y, BiPredicate<B, B> pred) {
             int j = x.size() - 1;
-            while (j >= 1 && pred.test(x.get(j).val, y.get(j).val)) {
+            while (j >= 1 && pred.test(x.get(j).val(), y.get(j).val())) {
                 j--;
             }
             if (j > 1) {
@@ -661,14 +650,10 @@ public interface Operator {
             return Optional.empty();
         }
 
-        Set<Bit> unknownBitsInRange(ValueRange range, Value... values) {
-            return Arrays.stream(values).flatMap(value -> value.getRange(range)).filter(Bit::isUnknown).collect(Collectors.toSet());
-        }
-
         IntStream indexesWithBitValue(Value value, B b){
             IntStream.Builder ints = IntStream.builder();
             int j = value.size() - 1;
-            while (j > 1 && value.get(j).val == b) {
+            while (j > 1 && value.get(j).val() == b) {
                 ints.add(j);
                 j--;
             }
@@ -677,8 +662,11 @@ public interface Operator {
 
         @Override
         public DependencySet computeDataDependencies(int i, Value x, Value y, List<Lattices.B> computedBitValues) {
-            if (i > 0 || computedBitValues.get(0).isConstant()) {
-                return DependencySetLattice.get().bot();
+            if (i > 0) {
+                return ds.bot();
+            }
+            if (computedBitValues.get(0).isConstant()){
+                return ds.empty();
             }
             return dependentBits.pop();
         }
@@ -718,16 +706,16 @@ public interface Operator {
 
         @Override
         Bit compute(Context c, Bit x, Bit y) {
-            if (x.val == X){
+            if (x.val() == X){
                 return y;
-            } else if (y.val == X){
+            } else if (y.val() == X){
                 return x;
             } else if (x == y){
                 return x;
             }
             Parser.PhiNode phi = (Parser.PhiNode)currentNode;
             if (phi.controlDeps.size() == 1){
-                B condVal = c.nodeValue(phi.controlDeps.get(0)).get(1).val;
+                B condVal = c.nodeValue(phi.controlDeps.get(0)).get(1).val();
                 switch (condVal){
                     case ONE:
                         return x;
@@ -735,12 +723,20 @@ public interface Operator {
                         return y;
                 }
             }
-            return super.compute(c, x, y);
+            Lattices.B bitValue = computeBitValue(x, y);
+            if (bitValue.isConstant()) {
+                return bl.create(bitValue);
+            }
+            DependencySet dataDeps = computeDataDependencies(x, y, bitValue);
+            Bit r = bl.create(bitValue, dataDeps);
+            c.repl(r, computeModificator(x, y, r, dataDeps));
+            r.addDependencies(computeControlDeps(c, phi, U, null));
+            return r;
         }
 
         @Override
         public Lattices.B computeBitValue(Bit x, Bit y) {
-            return bs.sup(x.val, y.val);
+            return bs.sup(x.val(), y.val());
         }
 
         @Override
@@ -748,13 +744,12 @@ public interface Operator {
             return Stream.of(x, y).filter(Bit::isUnknown).collect(DependencySet.collector());
         }
 
-        @Override
         public DependencySet computeControlDeps(Context context, Parser.MJNode node, B computedBitValue, DependencySet computedDataDependencies) {
             assert node instanceof Parser.PhiNode;
             if (computedBitValue == B.U) {
                 return ((Parser.PhiNode) node).controlDeps.stream().map(n -> context.nodeValue(n).get(1)).collect(DependencySet.collector());
             }
-            return DependencySetLattice.get().bot();
+            return ds.empty();
         }
 
         @Override
@@ -788,19 +783,27 @@ public interface Operator {
 
         @Override
         Bit computeBit(Context c, List<Bit> bits) {
-            List<Bit> nonBots = bits.stream().filter(b -> b != bl.bot()).collect(Collectors.toList());
+            List<Bit> nonBots = bits.stream().filter(b -> b.val() == X).collect(Collectors.toList());
             if (nonBots.size() == 1){
                 return nonBots.get(0);
             }
             if (bits.size() > 0 && bits.stream().filter(b -> b != bits.get(0)).count() == 0){
                 return bits.get(0);
             }
-            return super.computeBit(c, bits);
+            Lattices.B bitValue = computeBitValue(bits);
+            if (bitValue.isConstant()) {
+                return bl.create(bitValue);
+            }
+            DependencySet dataDeps = computeDataDependencies(bits, bitValue);
+            Bit r = bl.create(bitValue, dataDeps);
+            c.repl(r, computeModsCreator(r, dataDeps));
+            r.addDependencies(computeControlDeps(c, currentNode, bitValue, dataDeps));
+            return r;
         }
 
         @Override
         public Lattices.B computeBitValue(List<Bit> bits) {
-            return bs.sup(bits.stream().map(b -> b.val));
+            return bs.sup(bits.stream().map(b -> b.val()));
         }
 
         @Override
@@ -808,13 +811,12 @@ public interface Operator {
             return bits.stream().filter(Bit::isUnknown).collect(DependencySet.collector());
         }
 
-        @Override
         public DependencySet computeControlDeps(Context context, Parser.MJNode node, B computedBitValue, DependencySet computedDataDependencies) {
             assert node instanceof Parser.PhiNode;
             if (computedBitValue == B.U) {
                 return ((Parser.PhiNode) node).controlDeps.stream().map(n -> context.nodeValue(n).get(1)).collect(DependencySet.collector());
             }
-            return DependencySetLattice.get().bot();
+            return ds.empty();
         }
 
         @Override
@@ -849,7 +851,7 @@ public interface Operator {
 
         @Override
         Value compute(Context c, Value argument) {
-            return new Value(argument.extend(index).get(index));
+            return new Value(argument.get(index));
         }
     }
 

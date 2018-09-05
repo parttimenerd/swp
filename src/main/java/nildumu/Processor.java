@@ -85,7 +85,7 @@ public class Processor {
             public Boolean visit(IfStatementNode ifStatement) {
                 Value cond = context.nodeValue(ifStatement.conditionalExpression);
                 Bit condBit = cond.get(1);
-                Lattices.B condVal = condBit.val;
+                Lattices.B condVal = condBit.val();
                 if (condVal == U && unfinishedLoopIterations > 0){
                     context.weight(condBit, Context.INFTY);
                 }
@@ -123,7 +123,7 @@ public class Processor {
                 }
                 Value cond = context.nodeValue(whileStatement.conditionalExpression);
                 Bit condBit = cond.get(1);
-                Lattices.B condVal = condBit.val;
+                Lattices.B condVal = condBit.val();
                 if (condVal == U){
                     context.weight(condBit, Context.INFTY);
                 }

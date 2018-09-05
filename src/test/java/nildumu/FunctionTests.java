@@ -254,13 +254,25 @@ l output int o = fib(h);
     }
 
     public static void main(String[] args){
-        //Context.LOG.setLevel(Level.INFO);
-        String program = "bit_width 2;\n" +
-"int f(int a){\n" +
-"	return f(((1 ^ a) ^ 1)) + 1;\n" +
-"} f(1)" ;
+        Context.LOG.setLevel(Level.INFO);
+        String program = "     h input int h = 0b0uuuu;\n" +
+                "     l input int l = 0b0u;\n" +
+                "     int res = 0;\n" +
+                "     int fib(int a){\n" +
+                "         int r = 1;\n" +
+                "         while (a > 0){\n" +
+                "             if (a > 1){\n" +
+                "                r = r + fib(a - 1);\n" +
+                "             }\n" +
+                "         }\n" +
+                "         return r;\n" +
+                "     }\n" +
+                "     while (l) {\n" +
+                "        res = res + fib(h);\n" +
+                "     }\n" +
+                "     l output int o = fib(h); ";
         System.err.println(Parser.process(program).toPrettyString());
-       parse(program, MethodInvocationHandler.parse("handler=summary_mc;maxiter=2;bot=basic;dot=dots23"));
+       parse(program, MethodInvocationHandler.parse("handler=call_string;maxrec=1;bot=summary_mc"));
     }
 
     @Test

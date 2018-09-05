@@ -558,24 +558,32 @@ public class Lattices {
         }
     }
 
-    public static class DependencySet extends HashSet<Bit> {
+    public static interface DependencySet extends Set<Bit> {
+        public default Bit getSingleBit(){
+            assert size() == 1;
+            return iterator().next();
+        }
+        public DependencySet map(Function<Bit, Bit> mapper);
 
-        private boolean initialized = false;
-
-        public DependencySet(Collection<? extends Bit> c) {
-            super(c);
-            initialized = true;
+        public static Collector<Bit, ?, DependencySet> collector(){
+            return Collectors.collectingAndThen(Collectors.toList(), DependencySetImpl::new);
         }
 
-        public DependencySet(Bit bit){
+        DependencySet copy();
+    }
+
+    public static class DependencySetImpl extends HashSet<Bit> implements DependencySet {
+
+        private DependencySetImpl(Collection<? extends Bit> c) {
+            super(c);
+        }
+
+        private DependencySetImpl(Bit bit){
             this(Collections.singleton(bit));
         }
 
         @Override
         public boolean add(Bit bit) {
-            if (initialized) {
-                throw new UnsupportedOperationException();
-            }
             return super.add(bit);
         }
 
@@ -600,7 +608,7 @@ public class Lattices {
         }
 
         public static Collector<Bit, ?, DependencySet> collector(){
-            return Collectors.collectingAndThen(Collectors.toList(), DependencySet::new);
+            return Collectors.collectingAndThen(Collectors.toList(), DependencySetImpl::new);
         }
 
         public Bit getSingleBit(){
@@ -609,7 +617,50 @@ public class Lattices {
         }
 
         public DependencySet map(Function<Bit, Bit> mapper){
-            return stream().map(mapper).collect(DependencySet.collector());
+            return stream().map(mapper).collect(DependencySetImpl.collector());
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return (o instanceof DependencySetImpl && super.equals(o)) || (o instanceof EmptyDependencySet && this.isEmpty());
+        }
+
+        @Override
+        public DependencySet copy() {
+            return new DependencySetImpl(this);
+        }
+    }
+
+    /**
+     * Empty dependency set, used for all bits except of unknown bits.
+     */
+    public static class EmptyDependencySet extends AbstractSet<Bit> implements DependencySet {
+
+        private EmptyDependencySet(){}
+
+        @Override
+        public Iterator<Bit> iterator() {
+            return Collections.emptyIterator();
+        }
+
+        @Override
+        public int size() {
+            return 0;
+        }
+
+        @Override
+        public DependencySet map(Function<Bit, Bit> mapper) {
+            return this;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof EmptyDependencySet || (o instanceof DependencySetImpl && ((DependencySetImpl) o).isEmpty());
+        }
+
+        @Override
+        public DependencySet copy() {
+            return this;
         }
     }
 
@@ -617,12 +668,51 @@ public class Lattices {
 
         private static final DependencySetLattice instance = new DependencySetLattice();
 
+        private final EmptyDependencySet empty = new EmptyDependencySet();
+
         public DependencySetLattice() {
-            super(BitLattice.get(), DependencySet::new);
+            super(BitLattice.get(), DependencySetImpl::new);
         }
 
         public static DependencySetLattice get(){
             return instance;
+        }
+
+        /**
+         * Use {@link this#empty()} if the set should be unmodifiable, instead
+         * @return
+         */
+        @Override
+        public DependencySet bot() {
+            return new DependencySetImpl(Collections.emptySet());
+        }
+
+        @Deprecated
+        @Override
+        public DependencySet sup(Stream<DependencySet> elems) {
+            return super.sup(elems);
+        }
+
+        @Deprecated
+        @Override
+        public DependencySet sup(DependencySet a, DependencySet b) {
+            return super.sup(a, b);
+        }
+
+        @Deprecated
+        @Override
+        public DependencySet inf(Stream<DependencySet> elems) {
+            return super.inf(elems);
+        }
+
+        @Deprecated
+        @Override
+        public DependencySet inf(DependencySet a, DependencySet b) {
+            return super.inf(a, b);
+        }
+
+        public DependencySet empty(){
+            return empty;
         }
     }
 
@@ -631,54 +721,48 @@ public class Lattices {
     static final BitLattice bl = BitLattice.get();
     static final ValueLattice vl = ValueLattice.get();
 
-    /**
-     *
-     */
     public static class BitLattice implements Lattice<Bit> {
 
         private final static BitLattice BIT_LATTICE = new BitLattice();
 
-        Bit bot;
+        private final DefaultMap<B, Bit> constantBits = new DefaultMap<B, Bit>((map, b) -> new Bit(b));
 
         public BitLattice() {
-
         }
 
+        @Deprecated
         @Override
         public Bit sup(Bit a, Bit b) {
-            return create(bs.sup(a.val, b.val), ds.sup(a.dataDeps, b.dataDeps), ds.sup(a.dataDeps, b.dataDeps));
+            return create(bs.sup(a.val, b.val), ds.sup(a.deps, b.deps));
         }
 
+        @Deprecated
         @Override
         public Bit inf(Bit a, Bit b) {
-            return create(bs.inf(a.val, b.val), ds.inf(a.dataDeps, b.dataDeps), ds.inf(a.dataDeps, b.dataDeps));
+            return create(bs.inf(a.val, b.val), ds.inf(a.deps, b.deps));
         }
 
         @Override
         public Bit bot() {
-            if (bot == null){
-                bot = create(X);
-            }
-            return bot;
+            return create(X);
         }
 
         public Bit create(B val){
+            if (val != U){
+                return constantBits.get(val);
+            }
             return new Bit(val);
         }
 
-        public Bit create(B val, DependencySet dataDeps, DependencySet controlDeps) {
+        public Bit create(B val, DependencySet deps) {
             if (val != U){
                 return create(val);
             }
-            return new Bit(val, dataDeps, controlDeps);
+            return new Bit(val, deps);
         }
 
-        public Bit forceCreate(B val){
-            return new Bit(val);
-        }
-
-        public Bit forceCreate(B val, DependencySet dataDeps, DependencySet controlDeps) {
-            return new Bit(val, dataDeps, controlDeps);
+        public Bit forceCreateXBit(){
+            return new Bit(X);
         }
 
         @Override
@@ -689,11 +773,10 @@ public class Lattices {
             if (str.charAt(start) != '(' && str.charAt(start) != '#'){
                 return new Pair<>(new Bit(bs.parse(start, str, idToElement).first), start + 1);
             }
-            Pair<List<Object>, Integer> ret = parseTuple(start, str, idToElement, bs, ds, ds);
+            Pair<List<Object>, Integer> ret = parseTuple(start, str, idToElement, bs, ds);
             return new Pair<>(
                     new Bit((B)ret.first.get(0),
-                    (DependencySet)ret.first.get(1),
-                    (DependencySet)ret.first.get(0)), ret.second);
+                    (DependencySet)ret.first.get(1)), ret.second);
         }
 
         @Override
@@ -722,8 +805,7 @@ public class Lattices {
                 }
                 consumer.accept(cur);
                 if (!ignoreBit.test(cur)){
-                    bitsToVisit.addAll(cur.dataDeps);
-                    bitsToVisit.addAll(cur.controlDeps);
+                    bitsToVisit.addAll(cur.deps);
                 }
                 alreadyVisitedBits.add(cur);
             }
@@ -773,45 +855,33 @@ public class Lattices {
 
         private static long NUMBER_OF_BITS = 0;
 
-        B val;
-        DependencySet dataDeps;
-        DependencySet controlDeps;
-        DependencySet deps;
+        private B val;
+        private DependencySet deps;
         /**
          * Like the identity in the thesis
          */
         final long bitNo;
         private int valueIndex = 0;
         private Value value = null;
-        private int version = 0;
 
-        private Bit(B val, DependencySet dataDeps, DependencySet controlDeps) {
+        private Bit(B val, DependencySet deps) {
             this.val = val;
-            this.dataDeps = dataDeps;
-            this.controlDeps = controlDeps;
+            this.deps = deps;
             this.bitNo = NUMBER_OF_BITS++;
-            this.deps = ds.sup(dataDeps, controlDeps);
             assert checkInvariant();
         }
 
         private Bit(B val){
-            this(val, ds == null ? new DependencySet(set()) : ds.bot(),
-                    ds == null ? new DependencySet(set()) : ds.bot());
+            this(val, val.isConstant() ? ds.empty() : ds.bot());
         }
 
         @Override
         public String toString() {
-            /*if (value == null || value.description.isEmpty()) {
-                if (!hasDependencies()) {
-                    return bs.toString(val);
-                }
-                return String.format("(%s, %s, %s)", bs.toString(val), ds.toString(dataDeps), ds.toString(controlDeps));
-            }*/
             String inputStr = isInputBit() ? "#" : "";
             if (valueIndex == 0){
                 return val.toString();
             }
-            return String.format("%s%s[%d]%sv%d", inputStr, value == null ? "" : (value.node() == null ? value.description() : value.node().getTextualId()), valueIndex, val, version);
+            return String.format("%s%s[%d]%s", inputStr, value == null ? "" : (value.node() == null ? value.description() : value.node().getTextualId()), valueIndex, val);
         }
 
         @Override
@@ -820,7 +890,7 @@ public class Lattices {
         }
 
         public boolean hasDependencies(){
-            return dataDeps.size() + controlDeps.size() > 0;
+            return deps.size() > 0;
         }
 
         /**
@@ -828,7 +898,7 @@ public class Lattices {
          * @return
          */
         public boolean checkInvariant(){
-            return !val.isConstant() || dataDeps.isEmpty();
+            return !val.isConstant() || deps.isEmpty();
         }
 
         public boolean isConstant(){
@@ -839,7 +909,7 @@ public class Lattices {
          * Compares the val and the dependencies
          */
         public boolean valueEquals(Bit other){
-            return val.equals(other.val) && dataDeps.equals(other.dataDeps) && controlDeps.equals(other.controlDeps);
+            return val.equals(other.val) && deps.equals(other.deps);
         }
 
         public String repr() {
@@ -848,9 +918,9 @@ public class Lattices {
             }
             String name = "";
             if (value != null && !value.description.isEmpty()){
-                name = String.format("%s[%d]v%d|", value.node() == null ? value.description() : value.node().getTextualId(), valueIndex, version);
+                name = String.format("%s[%d]", value.node() == null ? value.description() : value.node().getTextualId(), valueIndex);
             }
-            return String.format("(%s%s, %s, %s)", name, bs.toString(val), ds.toString(dataDeps), ds.toString(controlDeps));
+            return String.format("(%s%s, %s)", name, bs.toString(val), ds.toString(deps));
         }
 
         public int valueIndex(){
@@ -883,16 +953,6 @@ public class Lattices {
             return isUnknown() && !hasDependencies();
         }
 
-        public void version(int version){
-            if (this.version == 0){
-                this.version = version;
-            }
-        }
-
-        public int version(){
-            return version;
-        }
-
         public static long getNumberOfCreatedBits(){
             return NUMBER_OF_BITS;
         }
@@ -905,15 +965,48 @@ public class Lattices {
             return bitNo + "";
         }
 
-        public void setDeps(DependencySet dataDeps, DependencySet controlDeps){
-            this.dataDeps = dataDeps;
-            this.controlDeps = controlDeps;
-            this.deps = ds.sup(dataDeps, controlDeps);
+        public void addDependency(Bit newDependency){
+            //assert isUnknown(); //TODO: fix
+            if (!isUnknown()){
+                return;
+            }
+            if (deps instanceof EmptyDependencySet){
+                deps = new DependencySetImpl(newDependency);
+            } else {
+                deps.add(newDependency);
+            }
+        }
+
+        public Bit addDependencies(Collection<Bit> newDependencies){
+            newDependencies.forEach(this::addDependency);
+            return this;
+        }
+
+        public void alterDependencies(Function<Bit, Bit> transformer){
+            if (deps.size() > 0){
+                this.deps = deps.map(transformer);
+            }
         }
 
         public void setVal(B newVal){
             assert bs.greaterEqualsThan(newVal, val);
             this.val = newVal;
+        }
+
+        B val() {
+            return val;
+        }
+
+        public DependencySet deps() {
+            return deps;
+        }
+
+        public void mergeVal(B val){
+            this.val = bs.sup(this.val, val);
+        }
+
+        public Bit copy(){
+            return new Bit(val, deps.copy());
         }
     }
 
@@ -925,11 +1018,13 @@ public class Lattices {
 
         private static final Value BOT = ValueLattice.get().parse("0bxx");
 
+        @Deprecated
         @Override
         public Value sup(Value a, Value b) {
             return mapBitsToValue(a, b, bl::sup);
         }
 
+        @Deprecated
         @Override
         public Value inf(Value a, Value b) {
             return mapBitsToValue(a, b, bl::inf);
@@ -981,35 +1076,16 @@ public class Lattices {
             return parse(Integer.toString(val));
         }
 
-        public void assertSizeMatches(Value a, Value b) {
-            assert a.size() == b.size() : "can only work with values of the same widths";
-        }
-
         public static ValueLattice get() {
             return lattice;
         }
 
-        /**
-         * Ensures the equal length of both values before they are passed to the consumer
-         */
-        public void apply(Value a, Value b, BiConsumer<Value, Value> consumer) {
-            int size = Math.min(Math.max(a.size(), b.size()), bitWidth);
-            consumer.accept(a.extend(size), b.extend(size));
-        }
-
-        /**
-         * Ensures the equal length of both values before they are passed to the transformer
-         */
-        public <R> R map(Value a, Value b, BiFunction<Value, Value, R> transformer) {
-            int size = Math.min(Math.max(a.size(), b.size()), bitWidth);
-            return transformer.apply(a.extend(size), b.extend(size));
-        }
-
         public <R> List<R> mapBits(Value a, Value b, BiFunction<Bit, Bit, R> transformer) {
-            return map(a, b, (aVal, bVal) -> {
-                Iterator<Bit> it = bVal.iterator();
-                return aVal.stream().map(aBit -> transformer.apply(aBit, it.next())).collect(Collectors.toList());
-            });
+            List<R> res = new ArrayList<>();
+            for (int i = 1; i <= Math.min(Math.max(a.size(), b.size()), bitWidth); i++){
+                res.add(transformer.apply(a.get(i), b.get(i)));
+            }
+            return res;
         }
 
         public Value mapBitsToValue(Value a, Value b, BiFunction<Bit, Bit, Bit> transformer) {
@@ -1033,7 +1109,7 @@ public class Lattices {
 
     public static class Value implements LatticeElement<Value, ValueLattice>, Iterable<Bit> {
 
-        final List<Bit> bits;
+        private final List<Bit> bits;
 
         private String description = "";
         private Parser.MJNode node = null;
@@ -1041,7 +1117,7 @@ public class Lattices {
         public Value(List<Bit> bits) {
             //assert bits.size() > 1;
             this.bits = bits;
-            for (int i = 0; i < bits.size(); i++) {
+            for (int i = 0; i < Math.min(bits.size(), vl.bitWidth); i++) {
                 Bit bit = bits.get(i);
                 bit.valueIndex(i + 1);
                 bit.value(this);
@@ -1051,29 +1127,6 @@ public class Lattices {
         public Value(Bit... bits) {
             this(Arrays.asList(bits));
         }
-
-        /**
-         * Extend with low sign bit
-         */
-        private static List<Bit> extend(List<Bit> bits, int resultBitWidth){
-            List<Bit> newBits = new ArrayList<>(bits);
-            Bit signBit = newBits.get(newBits.size() - 1);
-            for (int i = newBits.size(); i < resultBitWidth; i++){
-                newBits.add(signBit);
-            }
-            while (newBits.size() > resultBitWidth){
-                newBits.remove(newBits.size() - 1);
-            }
-            return newBits;
-        }
-
-        public Value extend(int bitWidth){
-            if (size() == bitWidth){
-                return this;
-            }
-            return new Value(extend(bits, bitWidth));
-        }
-
 
         @Override
         public boolean equals(Object obj) {
@@ -1221,6 +1274,22 @@ public class Lattices {
 
         public Value map(Function<Bit, Bit> mapper){
             return stream().map(mapper).collect(Value.collector());
+        }
+
+        public Set<Bit> bitSet(){
+            return new HashSet<>(bits);
+        }
+
+        public void mergeBit(int i, B val, DependencySet deps){
+            if (bits.size() <= i){
+                while (bits.size() < i){
+                    bits.add(bits.get(bits.size()).copy());
+                }
+                bits.add(bl.create(val, deps));
+            } else {
+                bits.get(i + 1).mergeVal(val);
+                bits.get(i + 1).addDependencies(deps);
+            }
         }
     }
 

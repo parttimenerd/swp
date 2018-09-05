@@ -148,7 +148,7 @@ public class Context {
 
             @Override
             public Value defaultValue(Map<MJNode, Value> map, MJNode key) {
-                return ValueLattice.get().bot();
+                return vl.bot();
             }
         }, FORBID_DELETIONS);
 
@@ -220,15 +220,11 @@ public class Context {
     }
 
     public static B v(Bit bit) {
-        return bit.val;
+        return bit.val();
     }
 
     public static DependencySet d(Bit bit) {
-        return bit.dataDeps;
-    }
-
-    public static DependencySet c(Bit bit) {
-        return bit.controlDeps;
+        return bit.deps();
     }
 
     /**
@@ -254,12 +250,9 @@ public class Context {
     public Value addInputValue(Sec<?> sec, Value value){
         input.add(sec, value);
         for (Bit bit : value){
-            if (bit.val == B.U){
-                if (!bit.dataDeps.isEmpty()){
-                    throw new NotAnInputBit(bit, "has data dependencies");
-                }
-                if (!bit.controlDeps.isEmpty()){
-                    throw new NotAnInputBit(bit, "has control dependencies");
+            if (bit.val() == B.U){
+                if (!bit.deps().isEmpty()){
+                    throw new NotAnInputBit(bit, "has dependencies");
                 }
                 sec(bit, sec);
             }
@@ -273,8 +266,8 @@ public class Context {
     }
 
     public boolean checkInvariants(Bit bit) {
-        return (sec(bit) == sl.bot() || (!v(bit).isConstant() && d(bit).isEmpty() && c(bit).isEmpty()))
-                && (!v(bit).isConstant() || (d(bit).isEmpty() && sec(bit) == sl.bot() && c(bit).isEmpty()));
+        return (sec(bit) == sl.bot() || (!v(bit).isConstant() && d(bit).isEmpty()))
+                && (!v(bit).isConstant() || (d(bit).isEmpty() && sec(bit) == sl.bot()));
     }
 
     public void checkInvariants(){
@@ -343,7 +336,7 @@ public class Context {
     }
 
     public boolean evaluate(MJNode node){
-        log(() -> "Evaluate node " + node + " " + nodeValue(node).get(1).deps.size());
+        log(() -> "Evaluate node " + node + " " + nodeValue(node).get(1).deps().size());
 
         boolean paramsChanged = compareAndStoreParamVersion(node);
         if (!paramsChanged){
@@ -555,7 +548,7 @@ public class Context {
         if (isInputBit(bit) && sec(bit) != sl.bot()){
             return 1;
         }
-        return bit.deps.stream().filter(Bit::isUnknown).filter(b -> {
+        return bit.deps().stream().filter(Bit::isUnknown).filter(b -> {
             if (alreadyVisitedBits.contains(b)) {
                 return false;
             }
@@ -594,7 +587,7 @@ public class Context {
     }
 
     /**
-     * merges n into m
+     * merges n into o
      * @param o
      * @param n
      * @return true if o value equals the merge result
@@ -602,16 +595,16 @@ public class Context {
     public boolean merge(Bit o, Bit n){
 
         B vt = bs.sup(v(o), v(n));
-        DependencySet dt = ds.sup(d(o), d(n));
-        DependencySet ct = ds.sup(c(o), c(n));
-        if (dt.equals(d(o)) && ct.equals(c(o)) && vt == v(o)){
+        int oldDepsCount = o.deps().size();
+        o.addDependencies(d(n));
+        if (oldDepsCount == o.deps().size() && vt == v(o)){
             return false;
         }
         o.setVal(vt);
-        o.setDeps(dt, ct);
         repl(o, (c, b, a) -> {
             Mods oMods = repl(o).apply(c, b, a);
             Mods nMods = repl(n).apply(c, b, a);
+            // TODO: correct?
             return Mods.empty().add(oMods).overwrite(nMods);
         });
         return true;
@@ -636,10 +629,9 @@ public class Context {
         return this;
     }
 
-    public Context methodInvocationHandler(MethodInvocationHandler handler) {
+    public void methodInvocationHandler(MethodInvocationHandler handler) {
         assert methodInvocationHandler == null;
         methodInvocationHandler = handler;
-        return this;
     }
 
     public MethodInvocationHandler methodInvocationHandler(){

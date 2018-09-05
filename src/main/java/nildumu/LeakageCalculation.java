@@ -10,7 +10,6 @@ import edu.uci.ics.jung.graph.util.EdgeType;
 import swp.util.Pair;
 
 import static nildumu.Context.INFTY;
-import static nildumu.Lattices.B.X;
 import static nildumu.Lattices.*;
 
 public class LeakageCalculation {
@@ -398,7 +397,7 @@ public class LeakageCalculation {
     }
 
     public static Set<Bit> rule(Bit bit) {
-        return bit.deps;
+        return bit.deps();
     }
 
     public static Rules rules(Context context) {
@@ -453,7 +452,7 @@ public class LeakageCalculation {
     }
 
     static Bit bit(String description) {
-        Bit bit = bl.forceCreate(X);
+        Bit bit = bl.forceCreateXBit();
         Value value = new Value(bit, bit).description(description);
         return bit;
     }
