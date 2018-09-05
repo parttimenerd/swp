@@ -257,10 +257,20 @@ l output int o = fib(h);
         //Context.LOG.setLevel(Level.INFO);
         String program = "bit_width 2;\n" +
 "int f(int a){\n" +
-"	return f(((1 ^ a) ^ 1));\n" +
+"	return f(((1 ^ a) ^ 1)) + 1;\n" +
 "} f(1)" ;
         System.err.println(Parser.process(program).toPrettyString());
-       parse(program, MethodInvocationHandler.parse("handler=summary;mode=ind;bot=basic;dot=dots"));
+       parse(program, MethodInvocationHandler.parse("handler=summary_mc;maxiter=2;bot=basic;dot=dots23"));
+    }
+
+    @Test
+    public void bla(){
+        String program = "bit_width 2;\n" +
+                "int f(int a){\n" +
+                "	return a + 1;\n" +
+                "} f(1)" ;
+        System.err.println(Parser.process(program).toPrettyString());
+        parse(program, MethodInvocationHandler.parse("handler=summary_mc;maxiter=2;bot=basic;dot=dots23.dot"));
     }
 
     static ContextMatcher parse(String program){

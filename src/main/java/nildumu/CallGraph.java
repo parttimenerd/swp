@@ -271,7 +271,6 @@ public class CallGraph {
             if (!state.get(cur).equals(newRes)) {
                 state.put(cur, newRes);
                 queue.addAll(next.apply(cur));
-                queue.add(cur);
             }
         }
         return state;

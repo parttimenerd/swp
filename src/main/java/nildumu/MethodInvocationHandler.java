@@ -6,16 +6,16 @@ import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
 
-import io.github.livingdocumentation.dotdiagram.DotGraph;
+import io.github.livingdocumentation.dotdiagram.*;
 import swp.util.Pair;
 
+import static nildumu.CallGraph.CallNode;
 import static nildumu.Context.*;
 import static nildumu.Lattices.B.U;
 import static nildumu.Lattices.*;
 import static nildumu.LeakageCalculation.*;
 import static nildumu.Parser.*;
 import static nildumu.Util.p;
-import static nildumu.CallGraph.*;
 
 /**
  * Handles the analysis of methods
@@ -34,7 +34,7 @@ public abstract class MethodInvocationHandler {
     }
 
     public static MethodInvocationHandler parse(String props){
-        Properties properties = new PropertyScheme().add("handler").parse(props);
+        Properties properties = new PropertyScheme().add("handler").parse(props, true);
         String handlerName = properties.getProperty("handler");
         if (!registry.containsKey(handlerName)){
             throw new MethodInvocationHandlerInitializationError(String.format("unknown handler %s", handlerName));
@@ -78,6 +78,10 @@ public abstract class MethodInvocationHandler {
         }
 
         public Properties parse(String props){
+            return parse(props, false);
+        }
+
+        public Properties parse(String props, boolean allowAnyProps){
             if (!props.contains("=")){
                 props = String.format("handler=%s", props);
             }
@@ -94,6 +98,13 @@ public abstract class MethodInvocationHandler {
                         throw new MethodInvocationHandlerInitializationError(String.format("for string \"%s\": property %s not set", props, defaulValEntry.getKey()));
                     }
                     properties.setProperty(defaulValEntry.getKey(), defaulValEntry.getValue());
+                }
+            }
+            if (!allowAnyProps) {
+                for (String prop : properties.stringPropertyNames()) {
+                    if (!defaultValues.containsKey(prop)) {
+                        throw new MethodInvocationHandlerInitializationError(String.format("for string \"%s\": property %s unknown", props, prop));
+                    }
                 }
             }
             return properties;
@@ -146,8 +157,6 @@ public abstract class MethodInvocationHandler {
          * bit → parameter number, index
          */
         private final Map<Bit, Pair<Integer, Integer>> bitInfo;
-
-        private LeakageCalculation.JungEdgeGraph jungEdgeGraph;
 
         final Value returnValue;
 
@@ -247,35 +256,41 @@ public abstract class MethodInvocationHandler {
             return calcReachableBits(bit, parameterBits);
         }
 
-        public LeakageCalculation.JungEdgeGraph getJungEdgeGraph(){
-            if (jungEdgeGraph == null){
-                Map<Sec<?>, Bit> inputAnchorBits = new HashMap<>();
-                Map<Sec<?>, Bit> outputAnchorBits = new HashMap<>();
-                inputAnchorBits.put(null, bit("i"));
-                outputAnchorBits.put(null, bit("h"));
-
-                Map<Bit, LeakageCalculation.Rule> rules = new HashMap<>();
-                Set<Bit> alreadyVisited = new HashSet<>();
-                for (Bit bit : returnValue) {
-                    bl.walkBits(bit, b -> {
-                        if (!context.isInputBit(b)) {
-                            rules.put(b, new LeakageCalculation.Rule(b, rule(b), context.hasInfiniteWeight(b)));
-                        }
-                    }, b -> !b.isUnknown());
-                }
-                LeakageCalculation.Rules rulesObj = new LeakageCalculation.Rules(inputAnchorBits, outputAnchorBits, rules);
-                jungEdgeGraph = new LeakageCalculation.JungEdgeGraph(rulesObj, LeakageCalculation.EdgeGraph.fromRules(rulesObj));
-            }
-            return jungEdgeGraph;
+        public Set<Bit> minCutBits(){
+            return minCutBits(new HashSet<>(returnValue.bits), parameterBits);
         }
 
-        public Set<Bit> minCutBits(){
-            return getJungEdgeGraph().minCutBits(null);
+        public Set<Bit> minCutBits(Set<Bit> outputBits, Set<Bit> inputBits){
+            Map<Sec<?>, Bit> inputAnchorBits = new HashMap<>();
+            Map<Sec<?>, Bit> outputAnchorBits = new HashMap<>();
+            Sec<?> sec = BasicSecLattice.HIGH;
+            Bit inputBit = bit("i");
+            Bit outputBit = bit("o");
+            inputAnchorBits.put(sec, inputBit);
+            outputAnchorBits.put(sec, outputBit);
+            Map<Bit, Set<Bit>> rules = new HashMap<>();
+            Set<Bit> alreadyVisited = new HashSet<>();
+            for (Bit bit : returnValue) {
+                bl.walkBits(bit, b -> {
+                    if (!context.isInputBit(b)) {
+                        rules.put(b, new HashSet<>(rule(b)));
+                    }
+                }, b -> !b.isUnknown());
+            }
+            rules.put(outputBit, new HashSet<Bit>(outputBits));
+            inputBits.forEach(b -> rules.getOrDefault(b, new HashSet<>()).add(inputBit));
+            LeakageCalculation.Rules rulesObj = new LeakageCalculation.Rules(inputAnchorBits, outputAnchorBits, rules.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e ->new Rule(e.getKey(), e.getValue(), context.hasInfiniteWeight(e.getKey())))));
+            return new LeakageCalculation.JungEdgeGraph(rulesObj, LeakageCalculation.EdgeGraph.fromRules(rulesObj)).minCutBits(sec);
         }
 
         public DotGraph createDotGraph(String name){
             DotGraph dotGraph = new DotGraph(name);
             DotGraph.Digraph g = dotGraph.getDigraph();
+            createDotGraph(g.addCluster(name), name);
+            return dotGraph;
+        }
+
+        private DotGraph.Cluster createDotGraph(DotGraph.Cluster g, String name){
             Set<Bit> alreadyVisited = new HashSet<>();
             Function<Bit, String> dotLabel = b -> b.uniqueId() + ": " + b.toString().replace("|", "or");
             for (Bit bit : returnValue) {
@@ -301,18 +316,7 @@ public abstract class MethodInvocationHandler {
                 param.forEach(b -> g.addAssociation(b.uniqueId(), nodeId));
                 g.addAssociation(nodeId, name);
             }
-            return dotGraph;
-        }
-
-        public void writeDotGraph(Path folder, String name){
-            Path path = folder.resolve(name + ".dot");
-            String graph = createDotGraph(name).render();
-            try {
-                Files.createDirectories(folder);
-                Files.write(path, Arrays.asList(graph.split("\n")));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            return g;
         }
 
         @Override
@@ -322,6 +326,18 @@ public abstract class MethodInvocationHandler {
                 return paramBitsPerReturnValue.equals(((BitGraph)obj).paramBitsPerReturnValue);
             }
             return false;
+        }
+
+        public void writeDotGraph(Path folder, String name){
+            Path path = folder.resolve(name + ".dot");
+
+            String graph = createDotGraph(name).render();
+            try {
+                Files.createDirectories(folder);
+                Files.write(path, Arrays.asList(graph.split("\n")));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -384,7 +400,11 @@ public abstract class MethodInvocationHandler {
                 if (dotFolder != null) {
                     graph.writeDotGraph(dotFolder, iteration.val + "_" + node.method.name);
                 }
-                return graph;
+                BitGraph reducedGraph = reduce(c, graph);
+                if (dotFolder != null) {
+                    reducedGraph.writeDotGraph(dotFolder, "r" + iteration.val + "_" + node.method.name);
+                }
+                return reducedGraph;
             }, node ->  {
                 BitGraph graph = bot(program, node.method, callSites);
                         if (dotFolder != null) {
@@ -456,32 +476,50 @@ public abstract class MethodInvocationHandler {
 
     public static class SummaryMinCutHandler extends SummaryHandler {
 
-        public SummaryMinCutHandler(int maxIterations, Mode mode, MethodInvocationHandler botHandler, Path dotFolder) {
+        private final int minCuts;
+
+        public SummaryMinCutHandler(int maxIterations, Mode mode, MethodInvocationHandler botHandler, Path dotFolder, int minCuts) {
             super(maxIterations, mode, botHandler, dotFolder);
+            this.minCuts = minCuts;
+            if (minCuts < 1){
+                throw new MethodInvocationHandlerInitializationError("Number of min cuts has to be at least one");
+            }
         }
 
         @Override
         BitGraph reduce(Context context, BitGraph bitGraph) {
             Set<Bit> anchorBits = new HashSet<>(bitGraph.parameterBits);
-            Set<Bit> minCutBits = bitGraph.minCutBits();
-            anchorBits.addAll(minCutBits);
-            DefaultMap<Bit, Bit> newBits = new DefaultMap<Bit, Bit>((map, bit) -> {
-                if (bitGraph.parameterBits.contains(bit)){
-                    return bit; // don't replace the parameter bits
-                }
-                return BitGraph.cloneBit(context, bit, ds.create(bitGraph.calcReachableBits(bit, anchorBits)).map(map::get), ds.bot());
-            });
-            Set<Bit> alreadyVisited = new HashSet<>();
-            for (Bit bit : bitGraph.returnValue) {
-                // for every result bit: topological walk that creates the middle bits in an
-                // order that doesn't lead to recursion
-                /*bl.walkTopologicalOrder(bit, b -> {
-                    if (minCutBits.contains(b)){
-                        newBits.get(b);
-                    }
-                }, bitGraph.parameterBits::contains, alreadyVisited);*/
+            Map<Pair<Set<Bit>, Set<Bit>>, Set<Bit>> outInMincut = new HashMap<>();
+            Function<Pair<Set<Bit>, Set<Bit>>, Set<Bit>> calcMinCut = p -> bitGraph.minCutBits(p.first, p.second);
+            Pair<Set<Bit>, Set<Bit>> initialPair = p(new HashSet<>(bitGraph.returnValue.bits), bitGraph.parameterBits);
+            outInMincut.put(initialPair, calcMinCut.apply(initialPair));
+            Set<Bit> minCutBits = new HashSet<>();
+            for (int i = 0; i < minCuts; i++) {
+                // choose pair to split
+                Map.Entry<Pair<Set<Bit>, Set<Bit>>, Set<Bit>> pair = outInMincut.entrySet().stream().sorted(Comparator.comparingInt(e -> -e.getValue().size())).findAny().get();
+                minCutBits.addAll(pair.getValue());
+                outInMincut.remove(pair.getKey());
+                Arrays.asList(p(pair.getKey().first, pair.getValue()),
+                    p(pair.getValue(), pair.getKey().second))
+                    .forEach(p -> outInMincut.put(p, calcMinCut.apply(p)));
             }
-            // now all middle bits are created and the return bits can be created
+            anchorBits.addAll(minCutBits);
+            Map<Bit, Bit> newBits = new HashMap<>();
+            // create the new bits
+            Stream.concat(bitGraph.returnValue.stream(), minCutBits.stream()).forEach(b -> {
+                Set<Bit> reachable = bitGraph.calcReachableBits(b, anchorBits);
+                if (!b.deps.contains(b)){
+                    reachable.remove(b);
+                }
+                Bit newB = BitGraph.cloneBit(context, b, ds.create(reachable), ds.bot());
+                newB.value(b.value());
+                newBits.put(b, newB);
+            });
+            bitGraph.parameterBits.forEach(b -> newBits.put(b, b));
+            // update the control dependencies
+            newBits.forEach((o, b) -> {
+                b.setDeps(b.dataDeps.map(newBits::get), ds.bot());
+            });
             Value ret = bitGraph.returnValue.map(newBits::get);
             ret.node(bitGraph.returnValue.node());
             return new BitGraph(context, bitGraph.parameters, ret);
@@ -511,9 +549,9 @@ public abstract class MethodInvocationHandler {
         });
         examplePropLines.add("handler=summary;maxiter=2;bot=basic");
         //examplePropLines.add("handler=summary;mode=ind");
-        register("summary_mc", propSchemeCreator, ps -> {
+        register("summary_mc", s -> propSchemeCreator.accept(s.add("mincuts", "3")), ps -> {
             Path dotFolder = ps.getProperty("dot").equals("") ? null : Paths.get(ps.getProperty("dot"));
-            return new SummaryMinCutHandler(ps.getProperty("mode").equals("coind") ? Integer.parseInt(ps.getProperty("maxiter")) : Integer.MAX_VALUE, ps.getProperty("mode").equals("ind") ? SummaryHandler.Mode.INDUCTION : SummaryHandler.Mode.COINDUCTION, parse(ps.getProperty("bot")), dotFolder);
+            return new SummaryMinCutHandler(ps.getProperty("mode").equals("coind") ? Integer.parseInt(ps.getProperty("maxiter")) : Integer.MAX_VALUE, ps.getProperty("mode").equals("ind") ? SummaryHandler.Mode.INDUCTION : SummaryHandler.Mode.COINDUCTION, parse(ps.getProperty("bot")), dotFolder, Integer.parseInt(ps.getProperty("mincuts")));
         });
         examplePropLines.add("handler=summary_mc;maxiter=2;bot=basic");
         //examplePropLines.add("handler=summary_mc;mode=ind");
