@@ -1081,8 +1081,13 @@ public class Lattices {
         }
 
         public <R> List<R> mapBits(Value a, Value b, BiFunction<Bit, Bit, R> transformer) {
+            return mapBits(a, b, transformer, Math.min(Math.max(a.size(), b.size()), bitWidth));
+        }
+
+        public <R> List<R> mapBits(Value a, Value b, BiFunction<Bit, Bit, R> transformer, int width) {
+            assert width <= bitWidth;
             List<R> res = new ArrayList<>();
-            for (int i = 1; i <= Math.min(Math.max(a.size(), b.size()), bitWidth); i++){
+            for (int i = 1; i <= width; i++){
                 res.add(transformer.apply(a.get(i), b.get(i)));
             }
             return res;
@@ -1090,6 +1095,10 @@ public class Lattices {
 
         public Value mapBitsToValue(Value a, Value b, BiFunction<Bit, Bit, Bit> transformer) {
             return new Value(mapBits(a, b, transformer));
+        }
+
+        public Value mapBitsToValue(Value a, Value b, BiFunction<Bit, Bit, Bit> transformer, int width) {
+            return new Value(mapBits(a, b, transformer, width));
         }
 
         public String toString(Value elem) {

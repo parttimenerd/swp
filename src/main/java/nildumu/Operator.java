@@ -878,6 +878,30 @@ public interface Operator {
         }
     }
 
+    static final BinaryOperator ADD = new BinaryOperator("+") {
+        @Override
+        Value compute(Context c, Value first, Value second) {
+            List<Bit> res = new ArrayList<>();
+            Util.Box<Bit> carry = new Util.Box<>(bl.create(ZERO));
+            return  vl.mapBitsToValue(first, second, (a, b) -> {
+                Pair<Bit, Bit> add = fullAdder(c, a, b, carry.val);
+                carry.val = add.second;
+                return add.first;
+            }, vl.bitWidth);
+        }
+
+        Pair<Bit, Bit> fullAdder(Context context, Bit a, Bit b, Bit c) {
+            Pair<Bit, Bit> pair = halfAdder(context, a, b);
+            Pair<Bit, Bit> pair2 = halfAdder(context, pair.first, c);
+            Bit carry = OR.compute(context, pair.second, pair2.second);
+            return new Pair<>(pair2.first, carry);
+        }
+
+        Pair<Bit, Bit> halfAdder(Context context, Bit first, Bit second) {
+            return new Pair<>(XOR.compute(context, first, second), AND.compute(context, first, second));
+        }
+    };
+
     default Value compute(Context c, List<Value> arguments){
         throw new NotImplementedException();
     }

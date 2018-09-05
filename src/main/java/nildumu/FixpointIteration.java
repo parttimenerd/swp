@@ -54,7 +54,11 @@ public class FixpointIteration {
         Set<Parser.MJNode> visitedBefore = new HashSet<>();
         Stack<Parser.MJNode> nodesToVisit = new Stack<>();
         nodesToVisit.add(node);
-        while (!nodesToVisit.isEmpty() && !Thread.interrupted()){
+        while (!nodesToVisit.isEmpty()){
+            if (Thread.interrupted()){
+                Thread.currentThread().interrupt();
+                return;
+            }
             Parser.MJNode curNode = nodesToVisit.pop();
             for (BaseAST childNode : curNode.children()){
                 if (childNode instanceof Parser.ExpressionNode){
@@ -109,6 +113,10 @@ public class FixpointIteration {
      * Assumes expression trees.
      */
     public static void walkExpression(Consumer<Parser.ExpressionNode> visitor, Parser.ExpressionNode expression){
+        if (Thread.interrupted()) {
+            Thread.currentThread().interrupt();
+            return;
+        }
         expression.children().stream().filter(c -> c instanceof Parser.ExpressionNode && !(c instanceof Parser.VariableAccessNode && !(c instanceof Parser.ParameterAccessNode)))
                 .forEach(c -> walkExpression(visitor, (Parser.ExpressionNode) c));
         visitor.accept(expression);

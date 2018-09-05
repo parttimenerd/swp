@@ -11,6 +11,8 @@ import static nildumu.Parser.*;
 
 public class Processor {
 
+    public static boolean transformPlus = false;
+
     public static Context process(String program){
         return process(program, Context.Mode.BASIC);
     }
@@ -20,7 +22,12 @@ public class Processor {
     }
 
     public static Context process(String program, Context.Mode mode, MethodInvocationHandler handler){
-        ProgramNode node = Parser.process(program);
+        return process(program, mode, handler, transformPlus);
+    }
+
+    public static Context process(String program, Context.Mode mode, MethodInvocationHandler handler, boolean transformPlus){
+        Processor.transformPlus = transformPlus;
+        ProgramNode node = Parser.process(program, transformPlus);
         node.context.mode(mode);
         handler.setup(node);
         return process(node.context.forceMethodInvocationHandler(handler), node);

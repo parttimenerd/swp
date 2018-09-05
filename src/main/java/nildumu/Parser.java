@@ -426,16 +426,21 @@ public class Parser implements Serializable {
             });
         }
     }
+
+    public static ProgramNode process(String input){
+        return process(input, true);
+    }
+
     /**
      * Process the passed input.
      * Currently does a name resolution and converts the result into SSA form
      */
-    public static ProgramNode process(String input){
+    public static ProgramNode process(String input, boolean transformPlus){
         ProgramNode program = (ProgramNode) generator.parse(input);
         new NameResolution(program).resolve();
         new SSAResolution(program).resolve();
         checkAndThrow(program);
-        ProgramNode transformedProgram = (ProgramNode)new MetaOperatorTransformator(program.context.maxBitWidth).process(program);
+        ProgramNode transformedProgram = (ProgramNode)new MetaOperatorTransformator(program.context.maxBitWidth, transformPlus).process(program);
         checkAndThrow(transformedProgram);
         return transformedProgram;
     }
@@ -780,6 +785,9 @@ public class Parser implements Serializable {
 
         public static void resetIdCounter(){
             idCounter = 0;
+        }
+        public static int getCurrentIdCount(){
+            return idCounter;
         }
 
         public Operator getOperator(Context c){
@@ -1910,6 +1918,8 @@ public class Parser implements Serializable {
                     return Operator.UNEQUALS;
                 case LOWER:
                     return Operator.LESS;
+                case PLUS:
+                    return Operator.ADD;
                 default:
                     return null;
             }

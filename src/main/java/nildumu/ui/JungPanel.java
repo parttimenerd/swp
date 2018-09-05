@@ -10,7 +10,7 @@ import java.util.function.Consumer;
 
 import javax.swing.*;
 
-import edu.uci.ics.jung.algorithms.layout.DAGLayout;
+import edu.uci.ics.jung.algorithms.layout.*;
 import edu.uci.ics.jung.graph.DirectedGraph;
 import edu.uci.ics.jung.visualization.*;
 import edu.uci.ics.jung.visualization.control.*;
@@ -37,13 +37,23 @@ public class JungPanel extends JPanel {
     private List<Consumer<VisuNode>> nodeClickedHandler = new ArrayList<>();
 
     public void update(JungGraph jungGraph){
+        try {
+            update(jungGraph, new DAGLayout<>(jungGraph.graph));
+        } catch (Exception ex){
+            update(jungGraph, new FRLayout<>(jungGraph.graph));
+            ex.printStackTrace();
+        }
+    }
+
+    public void update(JungGraph jungGraph, Layout<VisuNode, VisuEdge> layout){
         if (jungGraph.graph == this.graph){
             return;
         }
         this.graph = jungGraph.graph;
 
-        DAGLayout<VisuNode, VisuEdge> layout = new DAGLayout<>(graph);
-        layout.setRoot(jungGraph.input);
+        if (layout instanceof DAGLayout) {
+            ((DAGLayout) layout).setRoot(jungGraph.input);
+        }
 
         vv =  new VisualizationViewer<VisuNode, VisuEdge>(layout);
 

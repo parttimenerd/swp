@@ -13,6 +13,7 @@ import static nildumu.Util.p;
 public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
 
     private final int maxBitWidth;
+    private final boolean transformPlus;
 
     private final DefaultMap<ExpressionNode, ExpressionNode> replacedMap = new DefaultMap<>((map, node) -> {
         return repl(node);
@@ -22,8 +23,9 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
 
     private final Map<WhileStatementNode, WhileStatementNode> whileStmtMap = new HashMap<>();
 
-    MetaOperatorTransformator(int maxBitWidth) {
+    MetaOperatorTransformator(int maxBitWidth, boolean transformPlus) {
         this.maxBitWidth = maxBitWidth;
+        this.transformPlus = transformPlus;
     }
 
     public ProgramNode process(ProgramNode program){
@@ -58,7 +60,9 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
                     case MINUS:
                         return repl(new BinaryOperatorNode(new BinaryOperatorNode(binOp.left, new UnaryOperatorNode(binOp.right, TILDE), PLUS), new IntegerLiteralNode(binOp.location, Lattices.ValueLattice.get().parse(1)), PLUS));
                     case PLUS:
-                        return plus(binOp);
+                        if (transformPlus) {
+                            return plus(binOp);
+                        }
                     default:
                         return binOp;
                 }

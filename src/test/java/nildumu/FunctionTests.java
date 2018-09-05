@@ -5,7 +5,9 @@ import java.time.Duration;
 import java.util.logging.Level;
 import java.util.stream.*;
 
+import org.junit.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.*;
 import org.junit.jupiter.params.provider.*;
 
@@ -15,6 +17,16 @@ import static org.junit.jupiter.api.Assertions.*;
 import static nildumu.Parser.*;
 
 public class FunctionTests {
+
+    @BeforeClass
+    public void setUp(){
+        Processor.transformPlus = true;
+    }
+
+    @AfterClass
+    public void tearDown(){
+        Processor.transformPlus = false;
+    }
 
     @ParameterizedTest
     @ValueSource(strings = { "int bla(){}", "int bla1(int blub){}", "int bla1r(int blub){ return blub }" })
@@ -255,7 +267,7 @@ l output int o = fib(h);
 
     public static void main(String[] args){
         Context.LOG.setLevel(Level.INFO);
-        String program = "     h input int h = 0b0uuuu;\n" +
+        String program = "     h input int h = 0b0uuuuuu;\n" +
                 "     l input int l = 0b0u;\n" +
                 "     int res = 0;\n" +
                 "     int fib(int a){\n" +
@@ -271,7 +283,7 @@ l output int o = fib(h);
                 "        res = res + fib(h);\n" +
                 "     }\n" +
                 "     l output int o = fib(h); ";
-        System.err.println(Parser.process(program).toPrettyString());
+        System.err.println(Parser.process(program, false).toPrettyString());
        parse(program, MethodInvocationHandler.parse("handler=call_string;maxrec=1;bot=summary_mc"));
     }
 

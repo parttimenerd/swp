@@ -57,7 +57,7 @@ public class Context {
 
     public static final Logger LOG = Logger.getLogger("Analysis");
     static {
-        LOG.setLevel(Level.FINEST);
+        LOG.setLevel(Level.INFO);
     }
 
     public final SecurityLattice<?> sl;
@@ -131,6 +131,14 @@ public class Context {
         public String toString() {
             return path.stream().map(Object::toString).collect(Collectors.joining(" → "));
         }
+
+        public boolean isEmpty() {
+            return path.isEmpty();
+        }
+
+        public MethodInvocationNode peek() {
+            return path.get(path.size() - 1);
+        }
     }
 
     public static class NodeValueState {
@@ -186,7 +194,7 @@ public class Context {
 
     /*-------------------------- extended mode specific -------------------------------*/
 
-    public final Stack<Mods> modsStack = new Stack<>();
+    private final Stack<Mods> modsStack = new Stack<>();
 
     private final DefaultMap<Bit, ModsCreator> replMap = new DefaultMap<>(new WeakHashMap<>(), new DefaultMap.Extension<Bit, ModsCreator>() {
         @Override
@@ -197,18 +205,15 @@ public class Context {
 
     /*-------------------------- loop mode specific -------------------------------*/
 
-    private final DefaultMap<Bit, Integer> weightMap = new DefaultMap<>(new WeakHashMap<>(), new DefaultMap.Extension<Bit, Integer>() {
-        @Override
-        public Integer defaultValue(Map<Bit, Integer> map, Bit key) {
-            return 1;
-        }
-    });
+    private final HashMap<Bit, Integer> weightMap = new HashMap<>();
 
     public static final int INFTY = Integer.MAX_VALUE;
 
     /*-------------------------- methods -------------------------------*/
 
     private MethodInvocationHandler methodInvocationHandler;
+
+    private Stack<Set<Bit>> methodParameterBits = new Stack<>();
 
     /*-------------------------- unspecific -------------------------------*/
 
@@ -365,8 +370,11 @@ public class Context {
             } else {
                 newValue = oldValue;
             }
+            if (somethingChanged){
+                nodeValueState.nodeVersionMap.put(node, nodeValueState.nodeVersionMap.get(node) + 1);
+            }
         } else {
-            somethingChanged = nodeValue(node) == vl.bot();
+            somethingChanged = nodeValue(node).valueEquals(vl.bot());
         }
         nodeValue(node, newValue);
         newValue.description(node.getTextualId()).node(node);
@@ -545,6 +553,9 @@ public class Context {
     }
 
     private int c1(Bit bit, Set<Bit> alreadyVisitedBits){
+        if (!currentCallPath.isEmpty() && methodParameterBits.peek().contains(bit)){
+            return 1;
+        }
         if (isInputBit(bit) && sec(bit) != sl.bot()){
             return 1;
         }
@@ -574,11 +585,14 @@ public class Context {
     /* -------------------------- loop mode specific -------------------------------*/
 
     public int weight(Bit bit){
-        return weightMap.get(bit);
+        return weightMap.getOrDefault(bit, 1);
     }
 
     public void weight(Bit bit, int weight){
         assert weight == 1 || weight == INFTY;
+        if (weight == 1){
+            return;
+        }
         weightMap.put(bit, weight);
     }
 
@@ -598,6 +612,7 @@ public class Context {
         int oldDepsCount = o.deps().size();
         o.addDependencies(d(n));
         if (oldDepsCount == o.deps().size() && vt == v(o)){
+            replMap.remove(n);
             return false;
         }
         o.setVal(vt);
@@ -607,6 +622,7 @@ public class Context {
             // TODO: correct?
             return Mods.empty().add(oMods).overwrite(nMods);
         });
+        replMap.remove(n); // TODO: might be a hack
         return true;
     }
 
@@ -641,19 +657,33 @@ public class Context {
         return methodInvocationHandler;
     }
 
-    public void pushNewMethodInvocationState(MethodInvocationNode callSite){
+    public void pushNewMethodInvocationState(MethodInvocationNode callSite, List<Value> arguments){
+        pushNewMethodInvocationState(callSite, arguments.stream().flatMap(Value::stream).collect(Collectors.toSet()));
+    }
+
+    public void pushNewMethodInvocationState(MethodInvocationNode callSite, Set<Bit> argumentBits){
         currentCallPath = currentCallPath.push(callSite);
         variableStates.push(new State());
+        methodParameterBits.push(argumentBits);
         nodeValueState = nodeValueStates.get(currentCallPath);
     }
 
     public void popMethodInvocationState(){
         currentCallPath = currentCallPath.pop();
         variableStates.pop();
+        methodParameterBits.pop();
         nodeValueState = nodeValueStates.get(currentCallPath);
     }
 
     public CallPath callPath(){
         return currentCallPath;
+    }
+
+    public int numberOfMethodFrames(){
+        return nodeValueStates.size();
+    }
+
+    public int numberOfinfiniteWeightNodes(){
+        return weightMap.size();
     }
 }

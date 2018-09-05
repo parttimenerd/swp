@@ -134,7 +134,7 @@ public abstract class MethodInvocationHandler {
             MethodNode method = callSite.definition;
             if (methodCallCounter.get(method) < maxRec) {
                 methodCallCounter.put(method, methodCallCounter.get(method) + 1);
-                c.pushNewMethodInvocationState(callSite);
+                c.pushNewMethodInvocationState(callSite, arguments);
                 for (int i = 0; i < arguments.size(); i++) {
                     c.setVariableValue(method.parameters.get(i).definition, arguments.get(i));
                 }
@@ -436,7 +436,7 @@ public abstract class MethodInvocationHandler {
         }
 
         BitGraph methodIteration(Context c, MethodInvocationNode callSite, MethodInvocationHandler handler, List<Value> parameters){
-            c.pushNewMethodInvocationState(callSite);
+            c.pushNewMethodInvocationState(callSite, parameters.stream().flatMap(Value::stream).collect(Collectors.toSet()));
             for (int i = 0; i < parameters.size(); i++) {
                 c.setVariableValue(callSite.definition.parameters.get(i).definition, parameters.get(i));
             }

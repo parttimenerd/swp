@@ -11,6 +11,7 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.List;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -19,6 +20,9 @@ import javax.swing.event.*;
 import javax.swing.table.*;
 import javax.swing.text.BadLocationException;
 
+import edu.uci.ics.jung.algorithms.layout.*;
+import edu.uci.ics.jung.algorithms.layout.SpringLayout;
+import edu.uci.ics.jung.graph.DirectedGraph;
 import nildumu.*;
 import swp.LocatedSWPException;
 import swp.lexer.Location;
@@ -110,58 +114,72 @@ public class BasicUI {
         inputArea.setPaintMatchedBracketPair(true);
         inputScrollArea.setViewportView(inputArea);
         final JPanel panel6 = new JPanel();
-        panel6.setLayout(new GridLayoutManager(1, 6, new Insets(0, 0, 0, 0), -1, -1));
-        panel4.add(panel6, new GridConstraints(2, 0, 1, 9, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
-        runButton = new JButton();
-        runButton.setText("\uD83E\uDC92");
-        runButton.setToolTipText("Request processing of the program");
-        panel6.add(runButton, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(10, -1), null, 0, false));
-        stopButton = new JButton();
-        stopButton.setText("\u23F9");
-        panel6.add(stopButton, new GridConstraints(0, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(10, -1), null, 0, false));
-        modeComboBox = new JComboBox();
-        panel6.add(modeComboBox, new GridConstraints(0, 4, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        autoRunCheckBox = new JCheckBox();
-        autoRunCheckBox.setText("\u2B94");
-        autoRunCheckBox.setToolTipText("Auto run the processing of the program");
-        panel6.add(autoRunCheckBox, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        methodHandlerSelectionComboxBox = new JComboBox();
-        methodHandlerSelectionComboxBox.setEditable(true);
-        panel6.add(methodHandlerSelectionComboxBox, new GridConstraints(0, 5, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        outputModeComboxBox = new JComboBox();
-        panel6.add(outputModeComboxBox, new GridConstraints(0, 3, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        final JPanel panel7 = new JPanel();
-        panel7.setLayout(new GridLayoutManager(1, 9, new Insets(0, 0, 0, 0), -1, -1));
-        panel4.add(panel7, new GridConstraints(0, 0, 1, 9, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
+        panel6.setLayout(new GridLayoutManager(1, 9, new Insets(0, 0, 0, 0), -1, -1));
+        panel4.add(panel6, new GridConstraints(0, 0, 1, 9, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
         storeSelectComboBox = new JComboBox();
         storeSelectComboBox.setEditable(true);
         final DefaultComboBoxModel defaultComboBoxModel1 = new DefaultComboBoxModel();
         storeSelectComboBox.setModel(defaultComboBoxModel1);
-        panel7.add(storeSelectComboBox, new GridConstraints(0, 0, 1, 8, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel6.add(storeSelectComboBox, new GridConstraints(0, 0, 1, 8, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         storeButton = new JButton();
         storeButton.setText("\uD83D\uDDAA");
         storeButton.setToolTipText("Store the program as an example");
-        panel7.add(storeButton, new GridConstraints(0, 8, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(5, -1), null, 0, false));
+        panel6.add(storeButton, new GridConstraints(0, 8, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(5, -1), null, 0, false));
+        final JPanel panel7 = new JPanel();
+        panel7.setLayout(new BorderLayout(0, 0));
+        panel4.add(panel7, new GridConstraints(2, 0, 1, 9, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
         final JPanel panel8 = new JPanel();
-        panel8.setLayout(new GridLayoutManager(2, 10, new Insets(0, 0, 0, 0), -1, -1));
-        splitPane1.setRightComponent(panel8);
+        panel8.setLayout(new GridLayoutManager(1, 6, new Insets(0, 0, 0, 0), -1, -1));
+        panel7.add(panel8, BorderLayout.NORTH);
+        runButton = new JButton();
+        runButton.setText("\uD83E\uDC92");
+        runButton.setToolTipText("Request processing of the program");
+        panel8.add(runButton, new GridConstraints(0, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(10, -1), null, 0, false));
+        stopButton = new JButton();
+        stopButton.setText("\u23F9");
+        panel8.add(stopButton, new GridConstraints(0, 3, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(10, -1), null, 0, false));
+        modeComboBox = new JComboBox();
+        panel8.add(modeComboBox, new GridConstraints(0, 5, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        autoRunCheckBox = new JCheckBox();
+        autoRunCheckBox.setText("\u2B94");
+        autoRunCheckBox.setToolTipText("Auto run the processing of the program");
+        panel8.add(autoRunCheckBox, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        outputModeComboxBox = new JComboBox();
+        panel8.add(outputModeComboxBox, new GridConstraints(0, 4, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        transformPlusCheckBox = new JCheckBox();
+        transformPlusCheckBox.setText("+ → |");
+        transformPlusCheckBox.setMnemonic('|');
+        transformPlusCheckBox.setDisplayedMnemonicIndex(4);
+        panel8.add(transformPlusCheckBox, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        final JPanel panel9 = new JPanel();
+        panel9.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
+        panel7.add(panel9, BorderLayout.CENTER);
+        methodHandlerSelectionComboxBox = new JComboBox();
+        methodHandlerSelectionComboxBox.setEditable(true);
+        panel9.add(methodHandlerSelectionComboxBox, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        final JPanel panel10 = new JPanel();
+        panel10.setLayout(new GridLayoutManager(2, 10, new Insets(0, 0, 0, 0), -1, -1));
+        splitPane1.setRightComponent(panel10);
         jungPanel = new JungPanel();
-        panel8.add(jungPanel, new GridConstraints(0, 0, 1, 10, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(2000, 2000), null, 0, false));
+        panel10.add(jungPanel, new GridConstraints(0, 0, 1, 10, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(2000, 2000), null, 0, false));
         attackerSecLevelInput = new JComboBox();
-        panel8.add(attackerSecLevelInput, new GridConstraints(1, 9, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(50, -1), null, 0, false));
+        panel10.add(attackerSecLevelInput, new GridConstraints(1, 9, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(50, -1), null, 0, false));
         resetButton = new JButton();
         resetButton.setText("reset");
-        panel8.add(resetButton, new GridConstraints(1, 8, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel10.add(resetButton, new GridConstraints(1, 8, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         automaticRedrawCheckBox = new JCheckBox();
         automaticRedrawCheckBox.setSelected(true);
         automaticRedrawCheckBox.setText("Redraw automatically");
-        panel8.add(automaticRedrawCheckBox, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel10.add(automaticRedrawCheckBox, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         redrawButton = new JButton();
         redrawButton.setText("Redraw");
-        panel8.add(redrawButton, new GridConstraints(1, 7, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel10.add(redrawButton, new GridConstraints(1, 7, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         storeJsonButton = new JButton();
         storeJsonButton.setText("Store json");
-        panel8.add(storeJsonButton, new GridConstraints(1, 6, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel10.add(storeJsonButton, new GridConstraints(1, 6, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        layoutSelectionComboxBox = new JComboBox();
+        layoutSelectionComboxBox.setToolTipText("Different JUNG layout to draw the graph with");
+        panel10.add(layoutSelectionComboxBox, new GridConstraints(1, 1, 1, 4, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         parserErrorLabel = new JLabel();
         parserErrorLabel.setText("Label");
         panel1.add(parserErrorLabel, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
@@ -178,6 +196,29 @@ public class BasicUI {
         ALL,
         WONR,
         MIN
+    }
+
+    private enum Layout {
+        KK("KKLayout", KKLayout::new),
+        FR("FRLayout", FRLayout::new),
+        FR2("FRLayout2", FRLayout2::new),
+        SPRING("SpringLayout", SpringLayout::new),
+        SPRING2("SpringLayout2", SpringLayout2::new),
+        ISOM("ISOMLayout", ISOMLayout::new),
+        DAG("DAGLayout", DAGLayout::new);
+
+        final String name;
+        final Function<DirectedGraph<LeakageCalculation.VisuNode, LeakageCalculation.VisuEdge>, edu.uci.ics.jung.algorithms.layout.Layout> layoutCreator;
+
+        Layout(String name, Function<DirectedGraph<LeakageCalculation.VisuNode, LeakageCalculation.VisuEdge>, edu.uci.ics.jung.algorithms.layout.Layout> layoutCreator) {
+            this.name = name;
+            this.layoutCreator = layoutCreator;
+        }
+
+        @Override
+        public String toString() {
+            return name;
+        }
     }
 
     private JPanel panel1;
@@ -205,6 +246,8 @@ public class BasicUI {
     private JButton stopButton;
     private JComboBox methodHandlerSelectionComboxBox;
     private JComboBox outputModeComboxBox;
+    private JCheckBox transformPlusCheckBox;
+    private JComboBox layoutSelectionComboxBox;
     private Context context = null;
     private DocumentListener documentListener;
     private ResponsiveTimer graphViewRefreshTimer;
@@ -215,9 +258,19 @@ public class BasicUI {
     private boolean inLoadComboxBoxHandler = false;
     private boolean inMHComboxBoxHandler = false;
     private OutputMode outputMode;
-    private PrintStream stdOut = System.out;
+    private final String VAR_FILE = "gui.config";
+    private Properties properties;
+    private ResponsiveTimer propertiesWriteTimer;
 
     public BasicUI() {
+        properties = new Properties();
+        try {
+            properties.load(new FileReader(VAR_FILE));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        propertiesWriteTimer = new ResponsiveTimer(this::writeVarsToFile);
+        propertiesWriteTimer.start();
         documentListener = new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -257,30 +310,42 @@ public class BasicUI {
         AutoCompletion ac = new AutoCompletion(provider);
         ac.install(inputArea);
 
-        boolean shouldAutoRun = getVarContent("examples/lastAutoRun", "true").equals("true");
+        boolean shouldAutoRun = getVarContent("lastAutoRun", "true").equals("true");
         autoRunCheckBox.setSelected(shouldAutoRun);
+        transformPlusCheckBox.setSelected(getVarContent("lastTransformPlus", "true").equals("true"));
+        transformPlusCheckBox.addActionListener(e -> {
+            processRefreshTimer.request();
+            setVarContent("lastTransformPlus", transformPlusCheckBox.isSelected() + "");
+        });
         for (Context.Mode mode : Context.Mode.values()) {
             modeComboBox.addItem(mode);
         }
-        modeComboBox.setSelectedItem(Context.Mode.valueOf(getVarContent("examples/lastMode", Context.Mode.BASIC.name())));
+        modeComboBox.setSelectedItem(Context.Mode.valueOf(getVarContent("lastMode", Context.Mode.LOOP.name())));
         modeComboBox.addActionListener(a -> {
             Context.Mode mode = (Context.Mode) modeComboBox.getSelectedItem();
-            storeVarInFile("examples/lastMode", mode.name());
+            setVarContent("lastMode", mode.name());
             processRefreshTimer.request();
         });
         for (OutputMode mode : OutputMode.values()) {
             outputModeComboxBox.addItem(mode);
         }
-        setOutputMode(OutputMode.valueOf(getVarContent("examples/lastOutputMode", OutputMode.ALL.name())));
+        setOutputMode(OutputMode.valueOf(getVarContent("lastOutputMode", OutputMode.ALL.name())));
         outputModeComboxBox.setSelectedItem(outputMode);
         outputModeComboxBox.addActionListener(a -> {
             setOutputMode((OutputMode) outputModeComboxBox.getSelectedItem());
             processRefreshTimer.request();
         });
+        for (Layout layout : Layout.values()) {
+            layoutSelectionComboxBox.addItem(layout);
+        }
+        layoutSelectionComboxBox.setSelectedItem(Layout.valueOf(getVarContent("lastLayout", Layout.FR.name())));
+        layoutSelectionComboxBox.addActionListener(a -> {
+            setVarContent("lastLayout", ((Layout) layoutSelectionComboxBox.getSelectedItem()).name());
+            graphViewRefreshTimer.request();
+        });
         graphViewRefreshTimer = new ResponsiveTimer(this::updateGraphView);
-        boolean shouldAutoDraw = getVarContent("examples/lastAutoDraw", "true").equals("true");
+        boolean shouldAutoDraw = getVarContent("lastAutoDraw", "true").equals("true");
         graphViewRefreshTimer.setAutoRun(shouldAutoDraw);
-        graphViewRefreshTimer.start();
         processRefreshTimer = new ResponsiveTimer(() -> {
             parseRefreshTimer.abort();
             processAndUpdate(inputArea.getText());
@@ -296,7 +361,7 @@ public class BasicUI {
         automaticRedrawCheckBox.setSelected(shouldAutoDraw);
         automaticRedrawCheckBox.addChangeListener(e -> {
             graphViewRefreshTimer.setAutoRun(automaticRedrawCheckBox.isSelected());
-            storeVarInFile("examples/lastAutoDraw", automaticRedrawCheckBox.isSelected() + "");
+            setVarContent("lastAutoDraw", automaticRedrawCheckBox.isSelected() + "");
         });
         redrawButton.addActionListener(e -> updateGraphView());
         jungPanel.addNodeClickedHandler(this::updateNodeSelection);
@@ -347,7 +412,7 @@ public class BasicUI {
                 e.printStackTrace();
             }
         });
-        String props = getVarContent("examples/lastMHProps", MethodInvocationHandler.getDefaultPropString());
+        String props = getVarContent("lastMHProps", MethodInvocationHandler.getDefaultPropString());
         inMHComboxBoxHandler = true;
         for (String n : getExampleMethodHandlerPropStrings()) {
             methodHandlerSelectionComboxBox.addItem(n);
@@ -357,12 +422,12 @@ public class BasicUI {
         storeButton.addActionListener(a -> store((String) storeSelectComboBox.getSelectedItem()));
         storeJsonButton.addActionListener(e -> {
             JFileChooser fileChooser = new JFileChooser();
-            fileChooser.setCurrentDirectory(Paths.get(getVarContent("examples/lastJSONDir", ".")).toFile());
+            fileChooser.setCurrentDirectory(Paths.get(getVarContent("lastJSONDir", ".")).toFile());
             fileChooser.setDialogType(JFileChooser.SAVE_DIALOG);
             if (fileChooser.showDialog(panel1, "Choose file to export json") == JFileChooser.APPROVE_OPTION) {
                 Path path = fileChooser.getSelectedFile().toPath();
                 storeGraphJSON(path);
-                storeVarInFile("examples/lastJSONDir", path.getParent().toString());
+                setVarContent("lastJSONDir", path.getParent().toString());
             }
         });
         stopButton.addActionListener(e -> {
@@ -381,9 +446,11 @@ public class BasicUI {
         });
         autoRunCheckBox.addActionListener(e -> {
             processRefreshTimer.setAutoRun(autoRunCheckBox.isSelected());
-            storeVarInFile("examples/lastAutoRun", autoRunCheckBox.isSelected() + "");
+            setVarContent("lastAutoRun", autoRunCheckBox.isSelected() + "");
         });
+        transformPlusCheckBox.setText("+ → &!|^");
         inputArea.setText(lastContent);
+        graphViewRefreshTimer.start();
     }
 
     public void processAndUpdate(String program) {
@@ -403,7 +470,7 @@ public class BasicUI {
             ssaArea.setText(Parser.process(program).toPrettyString());
             Context.Mode mode = (Context.Mode) modeComboBox.getSelectedItem();
             long time = System.currentTimeMillis();
-            Context c = Processor.process(program, mode, MethodInvocationHandler.parse(methodHandlerSelectionComboxBox.getSelectedItem().toString()));
+            Context c = Processor.process(program, mode, MethodInvocationHandler.parse(methodHandlerSelectionComboxBox.getSelectedItem().toString()), transformPlusCheckBox.isSelected());
             if (context == null || c.sl != context.sl) {
                 context = c;
                 updateSecLattice();
@@ -412,6 +479,10 @@ public class BasicUI {
             long analysisTime = System.currentTimeMillis() - time;
             updateLeakageTable(context);
             addOutput(String.format(String.format("Analysis: %,dms, #Bits: %,d", analysisTime, Bit.getNumberOfCreatedBits())));
+            addOutput(String.format("#Nodes: %,d", Parser.MJNode.getCurrentIdCount()));
+            addOutput(String.format("Node version updates: %,d", context.getNodeVersionUpdateCount()));
+            addOutput(String.format("#Created frames: %,d", context.numberOfMethodFrames()));
+            addOutput(String.format("#Nodes with infinite weight: %,d", context.numberOfinfiniteWeightNodes()));
             if (shouldUpdateNodeValueTable()) {
                 updateNodeValueTable(context);
             }
@@ -455,7 +526,7 @@ public class BasicUI {
     }
 
     boolean shouldUpdateGraph() {
-        return getVarContent("examples/lastAutoDraw", "true").equals("true");
+        return getVarContent("lastAutoDraw", "true").equals("true");
     }
 
     boolean shouldLogOnStdOut() {
@@ -464,7 +535,7 @@ public class BasicUI {
 
     void setOutputMode(OutputMode newMode) {
         outputMode = newMode;
-        storeVarInFile("examples/lastOutputMode", outputMode.name());
+        setVarContent("lastOutputMode", outputMode.name());
         if (outputMode == OutputMode.ALL) {
             context.LOG.setLevel(Level.FINE);
         } else {
@@ -487,7 +558,7 @@ public class BasicUI {
             inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
         }
         try {
-            ssaArea.setText(Parser.process(program).toPrettyString());
+            ssaArea.setText(Parser.process(program, transformPlusCheckBox.isSelected()).toPrettyString());
         } catch (LocatedSWPException e) {
             parserErrorLabel.setText(e.getMessage());
             Location errorLocation = e.errorToken.location;
@@ -534,7 +605,8 @@ public class BasicUI {
                 if (attackerSecLevelInput.getSelectedItem() == null) {
                     return;
                 }
-                jungPanel.update(context.getJungGraphForVisu(((SecWrapper) attackerSecLevelInput.getSelectedItem()).sec));
+                LeakageCalculation.JungGraph jungGraph = context.getJungGraphForVisu(((SecWrapper) attackerSecLevelInput.getSelectedItem()).sec);
+                jungPanel.update(jungGraph, ((Layout) layoutSelectionComboxBox.getSelectedItem()).layoutCreator.apply(jungGraph.graph));
             } catch (RuntimeException error) {
                 parserErrorLabel.setText(error.getMessage());
                 error.printStackTrace();
@@ -757,39 +829,36 @@ public class BasicUI {
     }
 
     private void storeLastName(String name) {
-        storeVarInFile("examples/last.var", name);
+        setVarContent("last.var", name);
     }
 
     private String getLastName() {
-        return getVarContent("examples/last.var", "basic");
+        return getVarContent("last.var", "basic");
     }
 
     private String getLastContent() {
-        return getVarContent("examples/lastContent.var", null);
+        return getVarContent("lastContent.var", null);
     }
 
     private void storeLastContent(String content) {
-        storeVarInFile("examples/lastContent.var", content);
+        setVarContent("lastContent.var", content);
     }
 
-    private void storeVarInFile(String var, String content) {
-        if (content.isEmpty()) {
-            return;
-        }
-        try {
-            Files.write(Paths.get(var), Arrays.asList(content.split("\n")));
-        } catch (IOException e) {
-            e.printStackTrace();
-            addOutput(e.getMessage());
-        }
+    private void setVarContent(String var, String content) {
+        properties.setProperty(var, content);
+        propertiesWriteTimer.request();
     }
 
     private String getVarContent(String var, String defaultContent) {
+        return properties.getProperty(var, defaultContent);
+    }
+
+    private void writeVarsToFile() {
         try {
-            return Files.readAllLines(Paths.get(var)).stream().filter(s -> !s.isEmpty()).collect(Collectors.joining("\n"));
+            properties.store(new FileWriter(VAR_FILE), "gui");
         } catch (IOException e) {
+            e.printStackTrace();
         }
-        return defaultContent;
     }
 
     /**
@@ -850,17 +919,17 @@ public class BasicUI {
     }
 
     private void storeMethodHandlerPropString(String props) {
-        storeVarInFile("examples/lastMHProps", props);
+        setVarContent("lastMHProps", props);
         if (!getExampleMethodHandlerPropStrings().contains(props)) {
-            List<String> ownProps = new ArrayList<>(Arrays.asList(getVarContent("examples/mhprops", "").split("\n")));
+            List<String> ownProps = new ArrayList<>(Arrays.asList(getVarContent("mhprops", "").split("\n")));
             ownProps.add(props);
-            storeVarInFile("examples/mhprops", String.join("\n", ownProps));
+            setVarContent("mhprops", String.join("\n", ownProps));
         }
     }
 
     private List<String> getExampleMethodHandlerPropStrings() {
         List<String> props = new ArrayList<>(MethodInvocationHandler.getExamplePropLines());
-        String stored = getVarContent("examples/mhprops", "");
+        String stored = getVarContent("mhprops", "");
         if (!stored.isEmpty()) {
             props.addAll(Arrays.asList(stored.split("\n")));
         }
