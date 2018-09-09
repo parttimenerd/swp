@@ -476,14 +476,8 @@ public abstract class MethodInvocationHandler {
 
     public static class SummaryMinCutHandler extends SummaryHandler {
 
-        private final int minCuts;
-
-        public SummaryMinCutHandler(int maxIterations, Mode mode, MethodInvocationHandler botHandler, Path dotFolder, int minCuts) {
+        public SummaryMinCutHandler(int maxIterations, Mode mode, MethodInvocationHandler botHandler, Path dotFolder) {
             super(maxIterations, mode, botHandler, dotFolder);
-            this.minCuts = minCuts;
-            if (minCuts < 1){
-                throw new MethodInvocationHandlerInitializationError("Number of min cuts has to be at least one");
-            }
         }
 
         @Override
@@ -494,14 +488,8 @@ public abstract class MethodInvocationHandler {
             Pair<Set<Bit>, Set<Bit>> initialPair = p(bitGraph.returnValue.bitSet(), bitGraph.parameterBits);
             outInMincut.put(initialPair, calcMinCut.apply(initialPair));
             Set<Bit> minCutBits = new HashSet<>();
-            for (int i = 0; i < minCuts; i++) {
-                // choose pair to split
-                Map.Entry<Pair<Set<Bit>, Set<Bit>>, Set<Bit>> pair = outInMincut.entrySet().stream().sorted(Comparator.comparingInt(e -> -e.getValue().size())).findAny().get();
-                minCutBits.addAll(pair.getValue());
-                outInMincut.remove(pair.getKey());
-                Arrays.asList(p(pair.getKey().first, pair.getValue()),
-                    p(pair.getValue(), pair.getKey().second))
-                    .forEach(p -> outInMincut.put(p, calcMinCut.apply(p)));
+            for (Bit bit : bitGraph.returnValue) {
+                minCutBits.addAll(bitGraph.minCutBits(bitGraph.parameterBits, Collections.singleton(bit)));
             }
             anchorBits.addAll(minCutBits);
             Map<Bit, Bit> newBits = new HashMap<>();
@@ -549,9 +537,9 @@ public abstract class MethodInvocationHandler {
         });
         examplePropLines.add("handler=summary;maxiter=2;bot=basic");
         //examplePropLines.add("handler=summary;mode=ind");
-        register("summary_mc", s -> propSchemeCreator.accept(s.add("mincuts", "3")), ps -> {
+        register("summary_mc", propSchemeCreator, ps -> {
             Path dotFolder = ps.getProperty("dot").equals("") ? null : Paths.get(ps.getProperty("dot"));
-            return new SummaryMinCutHandler(ps.getProperty("mode").equals("coind") ? Integer.parseInt(ps.getProperty("maxiter")) : Integer.MAX_VALUE, ps.getProperty("mode").equals("ind") ? SummaryHandler.Mode.INDUCTION : SummaryHandler.Mode.COINDUCTION, parse(ps.getProperty("bot")), dotFolder, Integer.parseInt(ps.getProperty("mincuts")));
+            return new SummaryMinCutHandler(ps.getProperty("mode").equals("coind") ? Integer.parseInt(ps.getProperty("maxiter")) : Integer.MAX_VALUE, ps.getProperty("mode").equals("ind") ? SummaryHandler.Mode.INDUCTION : SummaryHandler.Mode.COINDUCTION, parse(ps.getProperty("bot")), dotFolder);
         });
         examplePropLines.add("handler=summary_mc;maxiter=2;bot=basic");
         //examplePropLines.add("handler=summary_mc;mode=ind");
