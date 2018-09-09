@@ -594,7 +594,8 @@ public class Lattices {
 
         @Override
         public boolean remove(Object o) {
-            throw new UnsupportedOperationException();
+            assert o instanceof Bit && ((Bit) o).val == X;
+            return super.remove(o);
         }
 
         @Override
@@ -863,6 +864,10 @@ public class Lattices {
         final long bitNo;
         private int valueIndex = 0;
         private Value value = null;
+        /**
+         * Store to use by analyses
+         */
+        Object store = null;
 
         private Bit(B val, DependencySet deps) {
             this.val = val;
@@ -1007,6 +1012,11 @@ public class Lattices {
 
         public Bit copy(){
             return new Bit(val, deps.copy());
+        }
+
+        public void removeXDependency(Bit bit) {
+            assert bit.val == X;
+            deps.remove(bit);
         }
     }
 
