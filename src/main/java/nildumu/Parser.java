@@ -119,11 +119,9 @@ public class Parser implements Serializable {
      * Change the id, when changing the parser oder replace the id by {@code null} to build the parser and lexer
      * every time (takes long)
      */
-    public static Generator generator = Generator.getCachedIfPossible("stuff/blaf5ef65534r6r55344474i446u7s5f2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
+    public static Generator generator = Generator.getCachedIfPossible("stuff/blaf5ef65534r6r5df5344474i446u7s5f2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
             (builder) -> {
                 builder.addRule("program", "use_sec? bit_width? lines", asts -> {
-                            MJNode.resetIdCounter();
-                            Bit.resetNumberOfCreatedBits();
                             SecurityLattice<?> secLattice = asts.get(0).children().isEmpty() ? BasicSecLattice.get() : ((ListAST<WrapperNode<SecurityLattice<?>>>)asts.get(0)).get(0).wrapped;
                             int declaredBitWidth = asts.get(1).children().isEmpty() ? -1 : ((ListAST<WrapperNode<Integer>>)asts.get(1)).get(0).wrapped;
                             /*
@@ -436,6 +434,8 @@ public class Parser implements Serializable {
      * Currently does a name resolution and converts the result into SSA form
      */
     public static ProgramNode process(String input, boolean transformPlus){
+        MJNode.resetIdCounter();
+        Bit.resetNumberOfCreatedBits();
         ProgramNode program = (ProgramNode) generator.parse(input);
         new NameResolution(program).resolve();
         new SSAResolution(program).resolve();

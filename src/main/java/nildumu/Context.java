@@ -57,7 +57,7 @@ public class Context {
 
     public static final Logger LOG = Logger.getLogger("Analysis");
     static {
-        LOG.setLevel(Level.INFO);
+        LOG.setLevel(Level.FINE);
     }
 
     public final SecurityLattice<?> sl;
@@ -279,7 +279,7 @@ public class Context {
         List<String> errorMessages = new ArrayList<>();
         walkBits(b -> {
             if (!checkInvariants(b)){
-                errorMessages.add(String.format("Invariants don't hold for %s", b.repr()));
+              //  errorMessages.add(String.format("Invariants don't hold for %s", b.repr()));
             }
         }, p -> false);
         throw new InvariantViolationError(String.join("\n", errorMessages));
@@ -315,6 +315,9 @@ public class Context {
     }
 
     public Value op(MJNode node, List<Value> arguments){
+        if (node instanceof VariableAccessNode){
+            return replace(nodeValue(((VariableAccessNode) node).definingExpression));
+        }
         return operatorForNode(node).compute(this, node, arguments);
     }
 
@@ -451,10 +454,19 @@ public class Context {
     private LeakageCalculation.AbstractLeakageGraph leakageGraph = null;
 
     public LeakageCalculation.AbstractLeakageGraph getLeakageGraph(){
-        if (leakageGraph == null){
+        //if (leakageGraph == null){
             leakageGraph = jungEdgeGraph(this);
-        }
+        //}
         return leakageGraph;
+    }
+
+    public Map<Sec<?>, MinCut.ComputationResult> computeLeakage(){
+        if (MinCut.usedAlgo == MinCut.Algo.JUNG){
+            return getLeakageGraph().leakages().entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey,
+                            e ->new MinCut.ComputationResult(leakageGraph.minCutBits(e.getKey()), e.getValue())));
+        }
+        return MinCut.compute(this);
     }
 
     public LeakageCalculation.JungGraph getJungGraphForVisu(Sec<?> secLevel){
@@ -607,7 +619,6 @@ public class Context {
      * @return true if o value equals the merge result
      */
     public boolean merge(Bit o, Bit n){
-
         B vt = bs.sup(v(o), v(n));
         int oldDepsCount = o.deps().size();
         o.addDependencies(d(n));

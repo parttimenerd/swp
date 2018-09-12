@@ -98,7 +98,7 @@ public class BasicUI {
         variableValueTable.setAutoResizeMode(2);
         variableValueScrollPane.setViewportView(variableValueTable);
         final JPanel panel4 = new JPanel();
-        panel4.setLayout(new GridLayoutManager(3, 9, new Insets(0, 0, 0, 0), -1, -1));
+        panel4.setLayout(new GridLayoutManager(4, 9, new Insets(0, 0, 0, 0), -1, -1));
         splitPane2.setLeftComponent(panel4);
         final JPanel panel5 = new JPanel();
         panel5.setLayout(new BorderLayout(0, 0));
@@ -158,28 +158,33 @@ public class BasicUI {
         methodHandlerSelectionComboxBox.setEditable(true);
         panel9.add(methodHandlerSelectionComboxBox, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         final JPanel panel10 = new JPanel();
-        panel10.setLayout(new GridLayoutManager(2, 10, new Insets(0, 0, 0, 0), -1, -1));
-        splitPane1.setRightComponent(panel10);
+        panel10.setLayout(new BorderLayout(0, 0));
+        panel4.add(panel10, new GridConstraints(3, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
+        minCutAlgoComboBox = new JComboBox();
+        panel10.add(minCutAlgoComboBox, BorderLayout.CENTER);
+        final JPanel panel11 = new JPanel();
+        panel11.setLayout(new GridLayoutManager(2, 10, new Insets(0, 0, 0, 0), -1, -1));
+        splitPane1.setRightComponent(panel11);
         jungPanel = new JungPanel();
-        panel10.add(jungPanel, new GridConstraints(0, 0, 1, 10, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(2000, 2000), null, 0, false));
+        panel11.add(jungPanel, new GridConstraints(0, 0, 1, 10, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(2000, 2000), null, 0, false));
         attackerSecLevelInput = new JComboBox();
-        panel10.add(attackerSecLevelInput, new GridConstraints(1, 9, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(50, -1), null, 0, false));
+        panel11.add(attackerSecLevelInput, new GridConstraints(1, 9, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, 1, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(50, -1), null, 0, false));
         resetButton = new JButton();
         resetButton.setText("reset");
-        panel10.add(resetButton, new GridConstraints(1, 8, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel11.add(resetButton, new GridConstraints(1, 8, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         automaticRedrawCheckBox = new JCheckBox();
         automaticRedrawCheckBox.setSelected(true);
         automaticRedrawCheckBox.setText("Redraw automatically");
-        panel10.add(automaticRedrawCheckBox, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel11.add(automaticRedrawCheckBox, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         redrawButton = new JButton();
         redrawButton.setText("Redraw");
-        panel10.add(redrawButton, new GridConstraints(1, 7, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel11.add(redrawButton, new GridConstraints(1, 7, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         storeJsonButton = new JButton();
         storeJsonButton.setText("Store json");
-        panel10.add(storeJsonButton, new GridConstraints(1, 6, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel11.add(storeJsonButton, new GridConstraints(1, 6, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         layoutSelectionComboxBox = new JComboBox();
         layoutSelectionComboxBox.setToolTipText("Different JUNG layout to draw the graph with");
-        panel10.add(layoutSelectionComboxBox, new GridConstraints(1, 1, 1, 4, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel11.add(layoutSelectionComboxBox, new GridConstraints(1, 1, 1, 4, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         parserErrorLabel = new JLabel();
         parserErrorLabel.setText("Label");
         panel1.add(parserErrorLabel, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
@@ -248,6 +253,7 @@ public class BasicUI {
     private JComboBox outputModeComboxBox;
     private JCheckBox transformPlusCheckBox;
     private JComboBox layoutSelectionComboxBox;
+    private JComboBox minCutAlgoComboBox;
     private Context context = null;
     private DocumentListener documentListener;
     private ResponsiveTimer graphViewRefreshTimer;
@@ -342,6 +348,15 @@ public class BasicUI {
         layoutSelectionComboxBox.addActionListener(a -> {
             setVarContent("lastLayout", ((Layout) layoutSelectionComboxBox.getSelectedItem()).name());
             graphViewRefreshTimer.request();
+        });
+        for (MinCut.Algo algo : MinCut.Algo.values()) {
+            minCutAlgoComboBox.addItem(algo);
+        }
+        minCutAlgoComboBox.setSelectedItem(MinCut.Algo.valueOf(getVarContent("lastMinCutAlgo", MinCut.usedAlgo.name())));
+        minCutAlgoComboBox.addActionListener(a -> {
+            MinCut.Algo algo = (MinCut.Algo) minCutAlgoComboBox.getSelectedItem();
+            setVarContent("lastMinCutAlgo", algo.name());
+            MinCut.usedAlgo = algo;
         });
         graphViewRefreshTimer = new ResponsiveTimer(this::updateGraphView);
         boolean shouldAutoDraw = getVarContent("lastAutoDraw", "true").equals("true");
@@ -650,7 +665,7 @@ public class BasicUI {
 
     private void updateLeakageTable(Context context) {
         List<Sec<?>> secLevels = new ArrayList<>((Set<Sec<?>>) context.sl.elements());
-        secLevels.forEach(s -> context.getLeakageGraph().leakage(s));
+        Map<Sec<?>, MinCut.ComputationResult> compRes = context.computeLeakage();
         leakageTable.setTableHeader(new JTableHeader());
         leakageTable.setModel(new AbstractTableModel() {
 
@@ -669,7 +684,7 @@ public class BasicUI {
                 if (columnIndex == 0) {
                     return secLevels.get(rowIndex);
                 }
-                return context.getLeakageGraph().leakage(secLevels.get(rowIndex));
+                return compRes.get(secLevels.get(rowIndex)).maxFlow;
             }
 
             @Override

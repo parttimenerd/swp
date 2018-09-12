@@ -84,7 +84,7 @@ public class LeakageCalculation {
 
         public Map<Sec<?>, Integer> leakages() {
             SecurityLattice<?> lattice = rules.inputAnchorBits.keySet().iterator().next().lattice();
-            return lattice.elements().stream().collect(Collectors.toMap(s -> s, this::leakage));
+            return lattice.elements().stream().collect(Collectors.toMap(s -> s, s -> s == lattice.top() ? 0 : leakage(s)));
         }
 
         public abstract Set<Bit> minCutBits(Sec<?> sec);
@@ -148,20 +148,6 @@ public class LeakageCalculation {
             public final Node end;
             public final Bit bit;
             public final int weight;
-
-            /**
-             * Inner bit edge
-             *
-             * @param start
-             * @param end
-             */
-            public Edge(Node start, Node end) {
-                this(start, end, null);
-            }
-
-            public Edge(Node start, Node end, Bit bit) {
-                this(start, end, bit, 1);
-            }
 
             public Edge(Node start, Node end, Bit bit, int weight) {
                 this.start = start;
@@ -228,7 +214,7 @@ public class LeakageCalculation {
                                     } else {
                                         nodes.add(start);
                                         nodes.add(end);
-                                        edges.add(new Edge(start, end, key));
+                                        edges.add(new Edge(start, end, key, rules.rules.containsKey(key) ? (rules.rules.get(key).hasInfiniteStartWeight ? INFTY : 1) : INFTY));
                                     }
                                     return new Pair<>(start, end);
                                 }
@@ -250,7 +236,7 @@ public class LeakageCalculation {
             for (Rule rule : rules.rules.values()) {
                 Bit start = rule.start;
                 for (Bit end : rule.replacements) {
-                    edges.add(new Edge(bitToNodes.get(start).second, bitToNodes.get(end).first, null, rule.hasInfiniteStartWeight ? INFTY : 1));
+                    edges.add(new Edge(bitToNodes.get(start).second, bitToNodes.get(end).first, null, INFTY));
                 }
             }
             return new EdgeGraph(inputs, outputs, nodes, edges);
@@ -283,9 +269,9 @@ public class LeakageCalculation {
                                                     graph,
                                                     edgeGraph.outputAnchorNodes.get(key),
                                                     edgeGraph.inputAnchorNodes.get(key),
-                                                    e -> e.isInnerBitEdge() && e.weight != INFTY ? 1 : edgeGraph.edges.size(),
+                                                    e -> (e.isInnerBitEdge() && e.weight != INFTY) ? 1 : edgeGraph.edges.size(),
                                                     new HashMap<>(),
-                                                    () -> new EdgeGraph.Edge(null, null));
+                                                    () -> new EdgeGraph.Edge(null, null, null, INFTY));
                                     karp.evaluate();
                                     return karp;
                                 }
@@ -299,6 +285,15 @@ public class LeakageCalculation {
 
         @Override
         public Set<Bit> minCutBits(Sec<?> sec) {
+            System.out.println("jung flow " + karps.get(sec).getMaxFlow());
+            if (karps.get(sec).getMaxFlow() >= edgeGraph.edges.size()){
+                Set<Bit> inputs = rules.rules.values().stream().filter(e -> e.replacements.contains(rules.inputAnchorBits.get(sec))).map(e -> e.start).collect(Collectors.toSet());
+                Set<Bit> outputs = this.rules.rules.get(this.rules.outputAnchorBits.get(sec)).replacements;
+                if (inputs.size() > outputs.size()){
+                    return outputs;
+                }
+                return inputs;
+            }
             return karps.get(sec).getMinCutEdges().stream().map(e -> e.bit).collect(Collectors.toSet());
         }
     }

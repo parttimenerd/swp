@@ -6,14 +6,13 @@ import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
 
-import io.github.livingdocumentation.dotdiagram.*;
+import io.github.livingdocumentation.dotdiagram.DotGraph;
 import swp.util.Pair;
 
 import static nildumu.CallGraph.CallNode;
 import static nildumu.Context.*;
 import static nildumu.Lattices.B.U;
 import static nildumu.Lattices.*;
-import static nildumu.LeakageCalculation.*;
 import static nildumu.Parser.*;
 import static nildumu.Util.p;
 
@@ -37,7 +36,7 @@ public abstract class MethodInvocationHandler {
         Properties properties = new PropertyScheme().add("handler").parse(props, true);
         String handlerName = properties.getProperty("handler");
         if (!registry.containsKey(handlerName)){
-            throw new MethodInvocationHandlerInitializationError(String.format("unknown handler %s", handlerName));
+            throw new MethodInvocationHandlerInitializationError(String.format("unknown handler %s, possible handlers are: %s", handlerName, registry.keySet()));
         }
         try {
             Pair<PropertyScheme, Function<Properties, MethodInvocationHandler>> pair = registry.get(handlerName);
@@ -261,26 +260,11 @@ public abstract class MethodInvocationHandler {
         }
 
         public Set<Bit> minCutBits(Set<Bit> outputBits, Set<Bit> inputBits){
-            Map<Sec<?>, Bit> inputAnchorBits = new HashMap<>();
-            Map<Sec<?>, Bit> outputAnchorBits = new HashMap<>();
-            Sec<?> sec = BasicSecLattice.HIGH;
-            Bit inputBit = bit("i");
-            Bit outputBit = bit("o");
-            inputAnchorBits.put(sec, inputBit);
-            outputAnchorBits.put(sec, outputBit);
-            Map<Bit, Set<Bit>> rules = new HashMap<>();
-            Set<Bit> alreadyVisited = new HashSet<>();
-            for (Bit bit : returnValue) {
-                bl.walkBits(bit, b -> {
-                    if (!context.isInputBit(b)) {
-                        rules.put(b, new HashSet<>(rule(b)));
-                    }
-                }, b -> !b.isUnknown());
-            }
-            rules.put(outputBit, new HashSet<Bit>(outputBits));
-            inputBits.forEach(b -> rules.getOrDefault(b, new HashSet<>()).add(inputBit));
-            LeakageCalculation.Rules rulesObj = new LeakageCalculation.Rules(inputAnchorBits, outputAnchorBits, rules.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e ->new Rule(e.getKey(), e.getValue(), context.hasInfiniteWeight(e.getKey())))));
-            return new LeakageCalculation.JungEdgeGraph(rulesObj, LeakageCalculation.EdgeGraph.fromRules(rulesObj)).minCutBits(sec);
+            return MinCut.compute(outputBits, inputBits, context::weight).minCut;
+        }
+
+        public Set<Bit> minCutBits(Set<Bit> outputBits, Set<Bit> inputBits, int outputWeight){
+            return MinCut.compute(outputBits, inputBits, b -> outputBits.contains(b) ? outputWeight : context.weight(b)).minCut;
         }
 
         public DotGraph createDotGraph(String name){
@@ -291,13 +275,17 @@ public abstract class MethodInvocationHandler {
         }
 
         private DotGraph.Cluster createDotGraph(DotGraph.Cluster g, String name){
+            return createDotGraph(g, name, (b1, b2) -> "");
+        }
+
+        private DotGraph.Cluster createDotGraph(DotGraph.Cluster g, String name, BiFunction<Bit, Bit, String> edgeLabel){
             Set<Bit> alreadyVisited = new HashSet<>();
-            Function<Bit, String> dotLabel = b -> b.uniqueId() + ": " + b.toString().replace("|", "or");
+            Function<Bit, String> dotLabel = b -> (context.weight(b) == INFTY ? "∞" : context.weight(b)) + "|" + b.uniqueId() + ": " + b.toString().replace("|", "or");
             for (Bit bit : returnValue) {
                 bl.walkBits(bit, b -> {
                     DotGraph.Node node = g.addNode(b.uniqueId());
                     node.setLabel(dotLabel.apply(b));
-                    b.deps().forEach(d -> g.addAssociation(b.uniqueId(), d.uniqueId()));
+                    b.deps().forEach(d -> g.addAssociation(b.uniqueId(), d.uniqueId()).setLabel(edgeLabel.apply(d, d )));
                 }, b -> false, alreadyVisited);
             }
             vl.walkBits(parameters, b -> {
@@ -329,6 +317,10 @@ public abstract class MethodInvocationHandler {
         }
 
         public void writeDotGraph(Path folder, String name){
+            writeDotGraph(folder, name, (b1, b2) -> "");
+        }
+
+        public void writeDotGraph(Path folder, String name, BiFunction<Bit, Bit, String> edgeLabel){
             Path path = folder.resolve(name + ".dot");
 
             String graph = createDotGraph(name).render();

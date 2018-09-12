@@ -5,7 +5,7 @@ import org.junit.jupiter.api.function.Executable;
 
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
+import java.util.stream.*;
 
 import static nildumu.Lattices.bs;
 import static nildumu.Lattices.vl;
@@ -81,28 +81,19 @@ public class ContextMatcher {
     }
 
     public ContextMatcher leakage(Consumer<LeakageMatcher> leakageTests){
-        leakageTests.accept(new LeakageMatcher(context.getLeakageGraph()));
+        leakageTests.accept(new LeakageMatcher());
         return this;
     }
 
     public class LeakageMatcher {
-        private final LeakageCalculation.AbstractLeakageGraph graph;
-
-        public LeakageMatcher(LeakageCalculation.AbstractLeakageGraph graph) {
-            this.graph = graph;
-        }
 
         public LeakageMatcher leaks(Lattices.Sec<?> attackerSec, int leakage){
-            builder.add(() -> Assertions.assertEquals(leakage, graph.leakage(attackerSec), () -> {
-
-               /* try {
-                    calcLeakageShowImage(context, attackerSec);
-                } catch (IOException | InterruptedException e) {
-                    e.printStackTrace();
-                }*/
-
-                return String.format("The calculated leakage for an attacker of level %s should be %d, leaking %s", attackerSec, leakage, graph.minCutBits(attackerSec).stream().map(Lattices.Bit::toString).collect(Collectors.joining(", ")));
-            }));
+            builder.add(() -> {
+                MinCut.ComputationResult comp = MinCut.compute(context, attackerSec);
+                Assertions.assertEquals(leakage, comp.maxFlow, () -> {
+                    return String.format("The calculated leakage for an attacker of level %s should be %d, leaking %s", attackerSec, leakage, comp.minCut.stream().map(Lattices.Bit::toString).collect(Collectors.joining(", ")));
+                });
+            });
             return this;
         }
 
@@ -111,7 +102,10 @@ public class ContextMatcher {
         }
 
         public LeakageMatcher leaksAtLeast(Lattices.Sec sec, int leakage) {
-            builder.add(() -> assertTrue(graph.leakage(sec) >= leakage, String.format("The calculated leakage for an attacker of level %s should be at least %d, leaking %d", sec, leakage, graph.leakage(sec))));
+            builder.add(() -> {
+                MinCut.ComputationResult comp = MinCut.compute(context, sec);
+                assertTrue(comp.maxFlow >= leakage, String.format("The calculated leakage for an attacker of level %s should be at least %d, leaking %d", sec, leakage, comp.maxFlow));
+            });
             return this;
         }
     }
@@ -143,6 +137,21 @@ public class ContextMatcher {
         String var = varAndIndex.split("\\[")[0];
         int i = Integer.parseInt(varAndIndex.split("\\[")[1].split("\\]")[0]);
         builder.add(() -> Assertions.assertEquals(bs.parse(val), context.getVariableValue(var).get(i).val(), String.format("%s should have the bit val %s", varAndIndex, val)));
+        return this;
+    }
+
+    /**
+     *
+     * @param varIndexVals "var[1] = 1; a[3] = 1"
+     */
+    public ContextMatcher bits(String varIndexVals){
+        if (!varIndexVals.contains("=")){
+            return this;
+        }
+        Stream.of(varIndexVals.split(";")).forEach(str -> {
+            String[] parts = str.split("=");
+            bit(parts[0].trim(), parts[1].trim());
+        });
         return this;
     }
 

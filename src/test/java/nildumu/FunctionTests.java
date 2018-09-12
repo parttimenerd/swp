@@ -97,14 +97,20 @@ l output int o = fib(h);
      </code>
      */
     @ParameterizedTest
-    @MethodSource("handlers")
-    public void testDepsOnFunctionResult(String handler){
+    @CsvSource({
+            "'handler=basic', 'o[1]=u;o[2]=u;h[1]=u;h[2]=0'",
+            "'handler=call_string', 'o[1]=1'",
+            "'handler=call_string;maxrec=3', 'o[1]=1'",
+            "'handler=summary', 'o[1]=1'"
+    })
+    public void testDepsOnFunctionResult(String handler, String bitComp){
+        Lattices.Bit.toStringGivesBitNo = true;
         assertTimeoutPreemptively(ofSeconds(10000), () -> parse("bit_width 2;\n" +
                 "     h input int h = 0b0u;\n" +
                 "     int f(int a){\n" +
                 "        return f(a) | 1;\n" +
                 "     }\n" +
-                "     l output int o = f(h);", handler).leaks(1).run());
+                "     l output int o = f(h);", handler).bits(bitComp).leaks(1).run());
     }
 
 

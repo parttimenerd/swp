@@ -8,7 +8,7 @@ import java.util.stream.*;
 import swp.util.Pair;
 
 import static nildumu.Lattices.B.*;
-import static nildumu.Util.*;
+import static nildumu.Util.toBinaryString;
 
 /**
  * The basic lattices needed for the project
@@ -726,8 +726,6 @@ public class Lattices {
 
         private final static BitLattice BIT_LATTICE = new BitLattice();
 
-        private final DefaultMap<B, Bit> constantBits = new DefaultMap<B, Bit>((map, b) -> new Bit(b));
-
         public BitLattice() {
         }
 
@@ -749,9 +747,9 @@ public class Lattices {
         }
 
         public Bit create(B val){
-            if (val != U){
+           /* if (val != U){
                 return constantBits.get(val);
-            }
+            }*/
             return new Bit(val);
         }
 
@@ -811,6 +809,25 @@ public class Lattices {
                 alreadyVisitedBits.add(cur);
             }
         }
+
+        public void walkBits(Bit startBit, Consumer<Bit> consumer, Predicate<Bit> ignoreBit, Set<Bit> alreadyVisitedBits, Function<Bit, Collection<Bit>> next){
+            Stack<Bit> bitsToVisit = new Stack<>();
+            if (ignoreBit.test(startBit)){
+                return;
+            }
+            bitsToVisit.push(startBit);
+            while (!bitsToVisit.isEmpty()){
+                Bit cur = bitsToVisit.pop();
+                if (alreadyVisitedBits.contains(cur)){
+                    continue;
+                }
+                consumer.accept(cur);
+                if (!ignoreBit.test(cur)){
+                    bitsToVisit.addAll(next.apply(cur));
+                }
+                alreadyVisitedBits.add(cur);
+            }
+        }
     }
 
     /**
@@ -856,6 +873,8 @@ public class Lattices {
 
         private static long NUMBER_OF_BITS = 0;
 
+        public static boolean toStringGivesBitNo = false;
+
         private B val;
         private DependencySet deps;
         /**
@@ -882,6 +901,9 @@ public class Lattices {
 
         @Override
         public String toString() {
+            if (toStringGivesBitNo){
+                return bitNo + "";
+            }
             String inputStr = isInputBit() ? "#" : "";
             if (valueIndex == 0){
                 return val.toString();
@@ -1018,6 +1040,19 @@ public class Lattices {
             assert bit.val == X;
             deps.remove(bit);
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Bit bit = (Bit) o;
+            return bitNo == bit.bitNo;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(bitNo);
+        }
     }
 
     public static class ValueLattice implements Lattice<Value> {
@@ -1136,7 +1171,7 @@ public class Lattices {
         public Value(List<Bit> bits) {
             //assert bits.size() > 1;
             this.bits = bits;
-            for (int i = 0; i < Math.min(bits.size(), vl.bitWidth); i++) {
+            for (int i = 0; i < Math.min(bits.size(), vl == null ? 1000 :vl.bitWidth); i++) {
                 Bit bit = bits.get(i);
                 bit.valueIndex(i + 1);
                 bit.value(this);

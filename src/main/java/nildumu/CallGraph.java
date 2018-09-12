@@ -11,8 +11,7 @@ import swp.lexer.Location;
 import swp.parser.lr.BaseAST;
 
 import static nildumu.Parser.*;
-
-import static nildumu.Util.*;
+import static nildumu.Util.Box;
 
 public class CallGraph {
 
