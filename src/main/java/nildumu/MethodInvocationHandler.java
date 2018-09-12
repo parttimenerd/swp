@@ -17,7 +17,9 @@ import static nildumu.Parser.*;
 import static nildumu.Util.p;
 
 /**
- * Handles the analysis of methods
+ * Handles the analysis of methods → implements the interprocedural part of the analysis.
+ *
+ * Handler classes can be registered and configured via property strings.
  */
 public abstract class MethodInvocationHandler {
 
@@ -25,13 +27,20 @@ public abstract class MethodInvocationHandler {
 
     private static List<String> examplePropLines = new ArrayList<>();
 
-    public static void register(String name, Consumer<PropertyScheme> propSchemeCreator, Function<Properties, MethodInvocationHandler> creator){
+    /**
+     * Regsiter a new class of handlers
+     */
+    private static void register(String name, Consumer<PropertyScheme> propSchemeCreator, Function<Properties, MethodInvocationHandler> creator){
         PropertyScheme scheme = new PropertyScheme();
         propSchemeCreator.accept(scheme);
         scheme.add("handler", null);
         registry.put(name, p(scheme, creator));
     }
 
+    /**
+     * Returns the handler for the passed string, the property "handler" defines the handler class
+     * to be used
+     */
     public static MethodInvocationHandler parse(String props){
         Properties properties = new PropertyScheme().add("handler").parse(props, true);
         String handlerName = properties.getProperty("handler");
@@ -59,11 +68,15 @@ public abstract class MethodInvocationHandler {
         }
     }
 
+    /**
+     * A basic scheme that defines the properties (with their possible default values) for each
+     * handler class
+     */
     public static class PropertyScheme {
-        public final char SEPARATOR = ';';
+        final char SEPARATOR = ';';
         private final Map<String, String> defaultValues;
 
-        public PropertyScheme() {
+        PropertyScheme() {
             defaultValues = new HashMap<>();
         }
 
@@ -110,6 +123,11 @@ public abstract class MethodInvocationHandler {
         }
     }
 
+    /**
+     * A call string based handler that just inlines a function.
+     * If a function was inlined in the current call path more than a defined number of times,
+     * then another handler is used to compute a conservative approximation.
+     */
     public static class CallStringHandler extends MethodInvocationHandler {
 
         final int maxRec;
@@ -333,6 +351,29 @@ public abstract class MethodInvocationHandler {
         }
     }
 
+    /**
+     * A summary-edge based handler. It creates for each function beforehand summary edges:
+     * these edges connect the parameter bits and the return bits. The analysis assumes that all
+     * parameter bits might have a statically unknown value. The summary-edge analysis builds the
+     * summary edges using a fix point iteration over the call graph. Each analysis of a method
+     * runs the normal analysis of the method body and uses the prior summary edges if a method is
+     * called in the body. The resulting bit graph is then reduced.
+     * <p/>
+     * It supports coinduction ("mode=coind") and induction ("mode=ind").
+     * <p/>
+     * Induction starts with no edges between parameter bits and return bits and iterates till no
+     * new connection between a return bit and a parameter bit is added. It only works for programs
+     * without recursion.
+     * <p/>
+     * Coinduction starts with the an over approximation produced by another handler ("bot" property)
+     * and iterates at most a configurable number of times ("maxiter" property), by default this
+     * number is {@value Integer#MAX_VALUE}.
+     * <p/>
+     * The default reduction policy is to connect all return bits with all parameter bits that they
+     * depend upon ("reduction=basic").
+     * And improved version ("reduction=mincut") includes the minimal cut bits of the bit graph from
+     * the return to the parameter bits, assuming that the return bits have infinite weights.
+     */
     public static class SummaryHandler extends MethodInvocationHandler {
 
         public static enum Mode {
@@ -343,6 +384,11 @@ public abstract class MethodInvocationHandler {
             INDUCTION
         }
 
+        public static enum Reduction {
+            BASIC,
+            MINCUT;
+        }
+
         final int maxIterations;
 
         final Mode mode;
@@ -351,13 +397,16 @@ public abstract class MethodInvocationHandler {
 
         final Path dotFolder;
 
+        final Reduction reductionMode;
+
         Map<MethodNode, BitGraph> methodGraphs;
 
         CallGraph callGraph;
 
-        public SummaryHandler(int maxIterations, Mode mode, MethodInvocationHandler botHandler, Path dotFolder) {
+        public SummaryHandler(int maxIterations, Mode mode, MethodInvocationHandler botHandler, Path dotFolder, Reduction reductionMode) {
             this.maxIterations = maxIterations;
             this.mode = mode;
+            this.reductionMode = reductionMode;
             assert !(mode == Mode.INDUCTION) || (maxIterations == Integer.MAX_VALUE);
             this.botHandler = botHandler;
             this.dotFolder = dotFolder;
@@ -448,41 +497,31 @@ public abstract class MethodInvocationHandler {
             };
         }
 
+        BitGraph reduce(Context context, BitGraph bitGraph){
+            switch (reductionMode) {
+                case BASIC:
+                    return basicReduce(context, bitGraph);
+                case MINCUT:
+                    return minCutReduce(context, bitGraph);
+            }
+            return null;
+        }
+
         /**
          * basic implementation, just connects a result bit with all reachable parameter bits
          */
-        BitGraph reduce(Context context, BitGraph bitGraph){
+        BitGraph basicReduce(Context context, BitGraph bitGraph){
             DefaultMap<Bit, Bit> newBits = new DefaultMap<Bit, Bit>((map, bit) -> {
-               return BitGraph.cloneBit(context, bit, ds.create(bitGraph.calcReachableParamBits(bit)));
+                return BitGraph.cloneBit(context, bit, ds.create(bitGraph.calcReachableParamBits(bit)));
             });
             Value ret = bitGraph.returnValue.map(newBits::get);
             ret.node(bitGraph.returnValue.node());
             return new BitGraph(context, bitGraph.parameters, ret);
         }
 
-        @Override
-        public Value analyze(Context c, MethodInvocationNode callSite, List<Value> arguments) {
-            return methodGraphs.get(callSite.definition).applyToArgs(c, arguments);
-        }
-    }
-
-    public static class SummaryMinCutHandler extends SummaryHandler {
-
-        public SummaryMinCutHandler(int maxIterations, Mode mode, MethodInvocationHandler botHandler, Path dotFolder) {
-            super(maxIterations, mode, botHandler, dotFolder);
-        }
-
-        @Override
-        BitGraph reduce(Context context, BitGraph bitGraph) {
+        BitGraph minCutReduce(Context context, BitGraph bitGraph) {
             Set<Bit> anchorBits = new HashSet<>(bitGraph.parameterBits);
-            Map<Pair<Set<Bit>, Set<Bit>>, Set<Bit>> outInMincut = new HashMap<>();
-            Function<Pair<Set<Bit>, Set<Bit>>, Set<Bit>> calcMinCut = p -> bitGraph.minCutBits(p.first, p.second);
-            Pair<Set<Bit>, Set<Bit>> initialPair = p(bitGraph.returnValue.bitSet(), bitGraph.parameterBits);
-            outInMincut.put(initialPair, calcMinCut.apply(initialPair));
-            Set<Bit> minCutBits = new HashSet<>();
-            for (Bit bit : bitGraph.returnValue) {
-                minCutBits.addAll(bitGraph.minCutBits(bitGraph.parameterBits, Collections.singleton(bit)));
-            }
+            Set<Bit> minCutBits = bitGraph.minCutBits(bitGraph.returnValue.bitSet(), bitGraph.parameterBits, INFTY);
             anchorBits.addAll(minCutBits);
             Map<Bit, Bit> newBits = new HashMap<>();
             // create the new bits
@@ -504,6 +543,11 @@ public abstract class MethodInvocationHandler {
             ret.node(bitGraph.returnValue.node());
             return new BitGraph(context, bitGraph.parameters, ret);
         }
+
+        @Override
+        public Value analyze(Context c, MethodInvocationNode callSite, List<Value> arguments) {
+            return methodGraphs.get(callSite.definition).applyToArgs(c, arguments);
+        }
     }
 
     static {
@@ -522,18 +566,20 @@ public abstract class MethodInvocationHandler {
             return new CallStringHandler(Integer.parseInt(ps.getProperty("maxrec")), parse(ps.getProperty("bot")));
         });
         examplePropLines.add("handler=call_string;maxrec=2;bot=basic");
-        Consumer<PropertyScheme> propSchemeCreator = s -> s.add("maxiter", "1").add("bot", "basic").add("dot", "").add("mode", "coind");
+        Consumer<PropertyScheme> propSchemeCreator = s ->
+                s.add("maxiter", "1")
+                        .add("bot", "basic")
+                        .add("dot", "")
+                        .add("mode", "coind")
+                        .add("reduction", "mincut");
         register("summary", propSchemeCreator, ps -> {
             Path dotFolder = ps.getProperty("dot").equals("") ? null : Paths.get(ps.getProperty("dot"));
-            return new SummaryHandler(ps.getProperty("mode").equals("coind") ? Integer.parseInt(ps.getProperty("maxiter")) : Integer.MAX_VALUE, ps.getProperty("mode").equals("ind") ? SummaryHandler.Mode.INDUCTION : SummaryHandler.Mode.COINDUCTION, parse(ps.getProperty("bot")), dotFolder);
+            return new SummaryHandler(ps.getProperty("mode").equals("coind") ? Integer.parseInt(ps.getProperty("maxiter")) : Integer.MAX_VALUE,
+                    ps.getProperty("mode").equals("ind") ? SummaryHandler.Mode.INDUCTION : SummaryHandler.Mode.COINDUCTION,
+                    parse(ps.getProperty("bot")), dotFolder, SummaryHandler.Reduction.valueOf(ps.getProperty("reduction").toUpperCase()));
         });
-        examplePropLines.add("handler=summary;maxiter=2;bot=basic");
-        //examplePropLines.add("handler=summary;mode=ind");
-        register("summary_mc", propSchemeCreator, ps -> {
-            Path dotFolder = ps.getProperty("dot").equals("") ? null : Paths.get(ps.getProperty("dot"));
-            return new SummaryMinCutHandler(ps.getProperty("mode").equals("coind") ? Integer.parseInt(ps.getProperty("maxiter")) : Integer.MAX_VALUE, ps.getProperty("mode").equals("ind") ? SummaryHandler.Mode.INDUCTION : SummaryHandler.Mode.COINDUCTION, parse(ps.getProperty("bot")), dotFolder);
-        });
-        examplePropLines.add("handler=summary_mc;maxiter=2;bot=basic");
+        examplePropLines.add("handler=summary;maxiter=2;bot=basic;reduction=basic");
+        examplePropLines.add("handler=summary;maxiter=2;bot=basic;reduction=mincut");
         //examplePropLines.add("handler=summary_mc;mode=ind");
     }
 

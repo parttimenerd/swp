@@ -316,7 +316,7 @@ l output int o = fib(h);
                 "	return a + 1;\n" +
                 "} f(1)" ;
         System.err.println(Parser.process(program).toPrettyString());
-        parse(program, MethodInvocationHandler.parse("handler=summary_mc;maxiter=2;bot=basic;dot=dots23.dot"));
+        parse(program, MethodInvocationHandler.parse("handler=summary;maxiter=2;bot=basic;dot=dots23.dot"));
     }
 
     static ContextMatcher parse(String program){

@@ -13,6 +13,10 @@ import swp.parser.lr.BaseAST;
 import static nildumu.Parser.*;
 import static nildumu.Util.Box;
 
+/**
+ * Call graph for a program that allows to fixpoint iterate over the call graph using an
+ * order-optimized worklist algorithm
+ */
 public class CallGraph {
 
     public static class CallNode {
