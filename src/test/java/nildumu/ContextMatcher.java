@@ -1,6 +1,5 @@
 package nildumu;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.function.Executable;
 
 import java.util.*;
@@ -37,7 +36,7 @@ public class ContextMatcher {
     public ContextMatcher val(String variable, int value){
         Lattices.Value actual = getValue(variable);
         builder.add(() -> assertTrue(actual.isConstant(), String.format("Variable %s should have an integer val, has %s", variable, actual.repr())));
-        builder.add(() -> Assertions.assertEquals(value, actual.asInt(),
+        builder.add(() -> assertEquals(value, actual.asInt(),
                 String.format("Variable %s should have integer val %d", variable, value)));
         return this;
     }
@@ -45,13 +44,9 @@ public class ContextMatcher {
     public ContextMatcher val(String variable, String value){
         Lattices.Value expected = vl.parse(value);
         Lattices.Value actual = getValue(variable);
-        assertEquals(expected.toLiteralString(), actual.toLiteralString(),
-                String.format("Variable %s should have val %s, has val %s", variable, expected.repr(), actual.repr()));
+        builder.add(() -> assertEquals(expected.toLiteralString(), actual.toLiteralString(),
+                String.format("Variable %s should have val %s, has val %s", variable, expected.repr(), actual.repr())));
         return this;
-    }
-
-    private <T> void assertEquals(T expected, T actual, String message){
-        builder.add(() -> assertEquals(expected, actual, message));
     }
 
     private Lattices.Value getValue(String variable){
@@ -65,7 +60,7 @@ public class ContextMatcher {
     }
 
     public ContextMatcher hasInputSecLevel(String variable, Lattices.Sec<?> expected){
-        assertEquals(expected, context.getInputSecLevel(getValue(variable)), String.format("Variable %s should be an input variable with level %s", variable, expected));
+        builder.add(() -> assertEquals(expected, context.getInputSecLevel(getValue(variable)), String.format("Variable %s should be an input variable with level %s", variable, expected)));
         return this;
     }
 
@@ -76,7 +71,7 @@ public class ContextMatcher {
     }
 
     public ContextMatcher hasOutputSecLevel(String variable, Lattices.Sec<?> expected){
-        assertEquals(expected, context.output.getSec(getValue(variable)), String.format("Variable %s should be an output variable with level %s", variable, expected));
+        builder.add(() -> assertEquals(expected, context.output.getSec(getValue(variable)), String.format("Variable %s should be an output variable with level %s", variable, expected)));
         return this;
     }
 
@@ -90,7 +85,7 @@ public class ContextMatcher {
         public LeakageMatcher leaks(Lattices.Sec<?> attackerSec, int leakage){
             builder.add(() -> {
                 MinCut.ComputationResult comp = MinCut.compute(context, attackerSec);
-                Assertions.assertEquals(leakage, comp.maxFlow, () -> {
+                assertEquals(leakage, comp.maxFlow, () -> {
                     return String.format("The calculated leakage for an attacker of level %s should be %d, leaking %s", attackerSec, leakage, comp.minCut.stream().map(Lattices.Bit::toString).collect(Collectors.joining(", ")));
                 });
             });
@@ -127,6 +122,11 @@ public class ContextMatcher {
         return leakage(l -> l.leaksAtLeast(context.sl.bot(), leakage));
     }
 
+    public ContextMatcher bitWidth(int bitWidth){
+        builder.add(() -> assertEquals(bitWidth, context.maxBitWidth, "Check of the used maximum bit width"));
+        return this;
+    }
+
     /**
      *
      * @param varAndIndex "var[1]"
@@ -136,7 +136,7 @@ public class ContextMatcher {
     public ContextMatcher bit(String varAndIndex, String val){
         String var = varAndIndex.split("\\[")[0];
         int i = Integer.parseInt(varAndIndex.split("\\[")[1].split("\\]")[0]);
-        builder.add(() -> Assertions.assertEquals(bs.parse(val), context.getVariableValue(var).get(i).val(), String.format("%s should have the bit val %s", varAndIndex, val)));
+        builder.add(() -> assertEquals(bs.parse(val), context.getVariableValue(var).get(i).val(), String.format("%s should have the bit val %s", varAndIndex, val)));
         return this;
     }
 
@@ -163,7 +163,7 @@ public class ContextMatcher {
         }
 
         public ValueMatcher bit(int i, Lattices.B val){
-            builder.add(() -> Assertions.assertEquals(val, value.get(i).val(), String.format("The %dth bit of %s should have the bit val %s", i, value, val)));
+            builder.add(() -> assertEquals(val, value.get(i).val(), String.format("The %dth bit of %s should have the bit val %s", i, value, val)));
             return this;
         }
     }

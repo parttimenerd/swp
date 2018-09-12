@@ -285,7 +285,6 @@ public class LeakageCalculation {
 
         @Override
         public Set<Bit> minCutBits(Sec<?> sec) {
-            System.out.println("jung flow " + karps.get(sec).getMaxFlow());
             if (karps.get(sec).getMaxFlow() >= edgeGraph.edges.size()){
                 Set<Bit> inputs = rules.rules.values().stream().filter(e -> e.replacements.contains(rules.inputAnchorBits.get(sec))).map(e -> e.start).collect(Collectors.toSet());
                 Set<Bit> outputs = this.rules.rules.get(this.rules.outputAnchorBits.get(sec)).replacements;

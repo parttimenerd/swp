@@ -57,7 +57,7 @@ public class Context {
 
     public static final Logger LOG = Logger.getLogger("Analysis");
     static {
-        LOG.setLevel(Level.FINE);
+        LOG.setLevel(Level.INFO);
     }
 
     public final SecurityLattice<?> sl;

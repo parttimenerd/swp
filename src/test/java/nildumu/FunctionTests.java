@@ -45,7 +45,7 @@ public class FunctionTests {
             "'int bla(){return 1} int x = bla()', '1'",
             "'int bla(int a){return a} int x = bla(1)', '1'",
             "'int bla(int a){return a | 1} int x = bla(1)', '1'",
-            "'int bla(int a){return a + 1} int x = bla(1)', '2'"
+            "'bit_width 3; int bla(int a){return a + 1} int x = bla(1)', '2'"
     })
     public void testBasicFunctionCalls(String program, String expectedValue){
         parse(program).val("x", expectedValue).run();
@@ -64,7 +64,7 @@ h input int h = 0b0u;
 int fib(int a){
 	int r = 1;
 	if (a > 1){
-		r = fib(a - 1);
+		r = fib(a - 1) + fib(a - 2);
 	}
 	return r;
 }
@@ -79,12 +79,28 @@ l output int o = fib(h);
 "int fib(int a){\n" +
 "	int r = 1;\n" +
 "	if (a > 1){\n" +
-"		r = fib(a - 1);\n" +
+"		r = fib(a - 1) + fib(a - 2);\n" +
 "	}\n" +
 "	return r;\n" +
 "}\n" +
 "l output int o = fib(h);", handler)).leaks(1).run();
     }
+
+    @ParameterizedTest
+    @MethodSource("handlers")
+    public void testFibonacci2(String handler){
+        assertTimeoutPreemptively(ofSeconds(10), () -> parse(//"bit_width 2;\n" +
+                "h input int h = 0b0uuuuuu;\n" +
+                "int fib(int a){\n" +
+                "	int r = 1;\n" +
+                "	if (a > 1){\n" +
+                "		r = fib(a - 1);\n" +
+                "	}\n" +
+                "	return r;\n" +
+                "}\n" +
+                "l output int o = fib(h);", handler)).leaks(6).run();
+    }
+
 
     /**
      <code>

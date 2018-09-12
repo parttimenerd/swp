@@ -136,6 +136,12 @@ public class BasicTests {
         parse(program);
     }
 
+    @ParameterizedTest
+    @CsvSource({"'int x = 0b0', 1", "'int x = 0b00', 2", "'int x = 0b000', 3", "'l input int x = 0b0u', 2", "'int x = 1', 2"})
+    public void testBitWidthDetection(String program, int expectedBitWidth){
+        parse(program).bitWidth(expectedBitWidth).run();
+    }
+
     public ContextMatcher parse(String program){
         return new ContextMatcher(process(program));
     }

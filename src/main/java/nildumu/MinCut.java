@@ -41,7 +41,7 @@ public class MinCut {
         }
     }
 
-    public static boolean DEBUG = true;
+    public static boolean DEBUG = false;
 
     public static class ComputationResult {
         public final Set<Bit> minCut;

@@ -1099,9 +1099,9 @@ public class Lattices {
                         i++;
                     }
                 }
-                if (bits.size() == 1){
+               /* if (bits.size() == 1){
                     bits.add(new Bit(ZERO));
-                }
+                }*/
                 return new Pair<>(new Value(bits), i);
             } else {
                 int end = start;
