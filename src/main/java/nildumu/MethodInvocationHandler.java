@@ -562,7 +562,7 @@ public abstract class MethodInvocationHandler {
             }
         });
         examplePropLines.add("handler=basic");
-        register("call_string", s -> s.add("maxrec", "1").add("bot", "basic"), ps -> {
+        register("call_string", s -> s.add("maxrec", "2").add("bot", "basic"), ps -> {
             return new CallStringHandler(Integer.parseInt(ps.getProperty("maxrec")), parse(ps.getProperty("bot")));
         });
         examplePropLines.add("handler=call_string;maxrec=2;bot=basic");

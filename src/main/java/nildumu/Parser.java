@@ -347,15 +347,15 @@ public class Parser implements Serializable {
                                         return new UnaryOperatorNode(child, op);
                                     })
                                     .closeLayer()
-                                    .binaryLayer(OR)
-                                    .binaryLayer(AND)
+                                    //.binaryLayer(OR)
+                                    //.binaryLayer(AND)
                                     .binaryLayer(BOR)
                                     .binaryLayer(BAND)
                                     .binaryLayer(XOR)
                                     .binaryLayer(EQUALS, UNEQUALS)
                                     .binaryLayer(LOWER, LOWER_EQUALS, GREATER, GREATER_EQUALS)
                                     .binaryLayer(PLUS, MINUS)
-                                    .binaryLayer(MULTIPLY, DIVIDE, MODULO)
+                                    //.binaryLayer(MULTIPLY, DIVIDE, MODULO)
                                     .unaryLayerLeft(INVERT, MINUS, TILDE, INDEX)
                                     .unaryLayerRight(INDEX);
                         })
