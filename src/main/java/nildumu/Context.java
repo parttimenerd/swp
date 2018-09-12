@@ -630,10 +630,9 @@ public class Context {
         repl(o, (c, b, a) -> {
             Mods oMods = repl(o).apply(c, b, a);
             Mods nMods = repl(n).apply(c, b, a);
-            // TODO: correct?
-            return Mods.empty().add(oMods).overwrite(nMods);
+            return Mods.empty().add(oMods).merge(nMods);
         });
-        replMap.remove(n); // TODO: might be a hack
+        replMap.remove(n);
         return true;
     }
 

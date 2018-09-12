@@ -68,4 +68,13 @@ public class Mods {
             return mods;
         });
     }
+
+    public Mods merge(Mods other) {
+        for (Map.Entry<Bit, Bit> entry : other.replacements.entrySet()) {
+            if (!replacements.containsKey(entry.getKey())){
+                replacements.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return this;
+    }
 }
