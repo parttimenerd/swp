@@ -11,6 +11,7 @@ import swp.util.Pair;
 import static nildumu.Context.v;
 import static nildumu.Lattices.*;
 import static nildumu.Lattices.B.*;
+import static nildumu.Util.log2;
 
 public interface Operator {
 
@@ -898,6 +899,119 @@ public interface Operator {
 
         Pair<Bit, Bit> halfAdder(Context context, Bit first, Bit second) {
             return new Pair<>(XOR.compute(context, first, second), AND.compute(context, first, second));
+        }
+    };
+
+    static final BinaryOperator LEFT_SHIFT = new BinaryOperator("+") {
+        @Override
+        Value compute(Context c, Value first, Value second) {
+            if (second.isConstant()){
+                int shift = second.asInt();
+                if (shift >= c.maxBitWidth){
+                    return vl.parse(0);
+                }
+                if (shift < 0){
+                    return RIGHT_SHIFT.compute(c, first, vl.parse(-shift));
+                }
+                return IntStream.range(1, c.maxBitWidth).mapToObj(i -> {
+                    if (i - shift < 1){
+                        return bl.create(ZERO);
+                    }
+                    return first.get(i - shift);
+                }).collect(Value.collector());
+            }
+            return createUnknownValue(first, second);
+        }
+    };
+
+    static final BinaryOperator RIGHT_SHIFT = new BinaryOperator("+") {
+
+
+        @Override
+        Value compute(Context c, Value first, Value second) {
+            if (second.isConstant()){
+                int shift = second.asInt();
+                if (shift < 0){
+                    return LEFT_SHIFT.compute(c, first, vl.parse(-shift));
+                }
+                return IntStream.range(1, c.maxBitWidth + 1).mapToObj(i -> {
+                    if (i + shift > c.maxBitWidth){
+                        return bl.create(ZERO);
+                    }
+                    return first.get(i + shift);
+                }).collect(Value.collector());
+            }
+            return createUnknownValue(first, second);
+        }
+    };
+
+    static Value setMultSign(Value first, Value second, Value result){
+        assert second.isConstant();
+        Bit sign = null;
+        if (first.signBit().val() == second.signBit().val()){
+            sign = bl.create(ZERO);
+        } else if (first.signBit().isConstant()){
+            sign = bl.create(ONE);
+        } else {
+            sign = first.signBit();
+        }
+        Bit _sign = sign;
+        return IntStream.range(1, result.size() + 1).mapToObj(i -> i == result.size() ? _sign : result.get(i)).collect(Value.collector());
+    }
+
+    static Value createUnknownValue(Value... deps){
+        int size = Stream.of(deps).mapToInt(Value::size).max().getAsInt();
+        DependencySet depBits = Stream.of(deps).flatMap(Value::stream).filter(Bit::isUnknown).collect(DependencySet.collector());
+        return IntStream.range(0, size).mapToObj(i -> bl.create(U, depBits)).collect(Value.collector());
+    }
+
+    static final BinaryOperator MULTIPLY = new BinaryOperator("+") {
+        @Override
+        Value compute(Context c, Value first, Value second) {
+            if (second.isPowerOfTwo()){
+                return setMultSign(first, second, LEFT_SHIFT.compute(c, first, vl.parse(Math.abs((int) log2(second.asInt())))));
+            }
+            if (first.isPowerOfTwo()){
+                return MULTIPLY.compute(c, second, first);
+            }
+            if (first.isConstant() && second.isConstant()){
+                return vl.parse(first.asInt() * second.asInt());
+            }
+            return createUnknownValue(first, second);
+        }
+    };
+
+    static final BinaryOperator DIVIDE = new BinaryOperator("+") {
+        @Override
+        Value compute(Context c, Value first, Value second) {
+            if (second.isPowerOfTwo()){
+                return setMultSign(first, second, RIGHT_SHIFT.compute(c, first, vl.parse((int)log2(second.asInt()))));
+            }
+            if (first.isPowerOfTwo()){
+                return DIVIDE.compute(c, second, first);
+            }
+            if (first.isConstant() && second.isConstant()){
+                return vl.parse(first.asInt() * second.asInt());
+            }
+            return createUnknownValue(first, second);
+        }
+    };
+
+    static final BinaryOperator MODULO = new BinaryOperator("+") {
+        @Override
+        Value compute(Context c, Value first, Value second) {
+            if (second.isPowerOfTwo() && !second.isNegative()){
+                return IntStream.range(1, c.maxBitWidth).mapToObj(i -> {
+                    if (i > log2(second.asInt())){
+                        return bl.create(ZERO);
+                    }
+                    return first.get(i);
+                }).collect(Value.collector());
+            }
+            if (first.isConstant() && second.isConstant()){
+                return vl.parse(first.asInt() % second.asInt());
+            }
+            return createUnknownValue(first, second);
         }
     };
 

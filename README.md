@@ -55,15 +55,18 @@ program
   - `^` (bit wise xor)
   - `=`, `!=`
   - `<`, `<=`, `=>`, `>`
-  - `+`, `-`
+  - `+`, `-`, `<<`, `>>`, `*`
   - unary operators: `~`, `-`, `!`
   - `·[n]`: a bit select operator, that selects the `n`th bit, `n` being
     a literal >= 1
   - `[n]·`: a bit place operator, that returns a value that has the
     first bit of the child expression as its `n`th bit and is otherwise
     zero
+  - `/`, `%`
+    - only sound if no exception occurs
 - the features are trimmed down, to make the implementation as simple
   as feasable
+- the analysis assumes that all program evaluations terminate
 
 UI
 ---

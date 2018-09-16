@@ -8,6 +8,7 @@ import java.util.stream.*;
 import swp.util.Pair;
 
 import static nildumu.Lattices.B.*;
+import static nildumu.Util.log2;
 import static nildumu.Util.toBinaryString;
 
 /**
@@ -1344,6 +1345,14 @@ public class Lattices {
                 bits.get(i + 1).mergeVal(val);
                 bits.get(i + 1).addDependencies(deps);
             }
+        }
+
+        public boolean isPowerOfTwo(){
+            if (!isConstant()){
+                return false;
+            }
+            double twoLog = log2(asInt());
+            return ((int)twoLog) == twoLog;
         }
     }
 

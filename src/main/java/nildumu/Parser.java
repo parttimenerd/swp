@@ -68,20 +68,21 @@ public class Parser implements Serializable {
         AND("&&"),
         OR("\\|\\|"),
         BAND("&"),
-        BOR("\\|"),
-        XOR("\\^"),
+        BOR("\\|", "|"),
+        XOR("\\^", "^"),
+        LEFT_SHIFT("<<"),
+        RIGHT_SHIFT(">>"),
         LPAREN("\\("),
         RPAREN("\\)"),
-        QUESTION_MARK("\\?"),
-        SEMICOLON("(\\;|\\n)+"),
+        SEMICOLON("(\\;|\\n)+", ";"),
         INTEGER_LITERAL("(([1-9][0-9]*)|0)|(0b[01]+)|(\\-([1-9][0-9]*))"),
         INPUT_LITERAL("(0b[01u]+)"),
         IDENT("[A-Za-z_][A-Za-z0-9_]*"),
         LCURLY("\\{"),
         RCURLY("\\}"),
         COLON(":"),
-        COMMA("[,]"),
-        DOT("\\."),
+        COMMA("[,]", ","),
+        DOT("\\.", "."),
         INDEX("\\[[1-9][0-9]*\\]"),
         SELECT_OP("\\[s[1-9][0-9]*\\]"),
         PLACE_OP("\\[p[1-9][0-9]*\\]");
@@ -119,7 +120,7 @@ public class Parser implements Serializable {
      * Change the id, when changing the parser oder replace the id by {@code null} to build the parser and lexer
      * every time (takes long)
      */
-    public static Generator generator = Generator.getCachedIfPossible("stuff/blaf5ef65534r6r5df5344474i446u7s5f2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
+    public static Generator generator = Generator.getCachedIfPossible("stuff/blaf5ef65534r6r5df5344474i4f46u7s5f2", LexerTerminal.class, new String[]{"WS", "COMMENT", "LBRK"},
             (builder) -> {
                 builder.addRule("program", "use_sec? bit_width? lines", asts -> {
                             SecurityLattice<?> secLattice = asts.get(0).children().isEmpty() ? BasicSecLattice.get() : ((ListAST<WrapperNode<SecurityLattice<?>>>)asts.get(0)).get(0).wrapped;
@@ -354,8 +355,9 @@ public class Parser implements Serializable {
                                     .binaryLayer(XOR)
                                     .binaryLayer(EQUALS, UNEQUALS)
                                     .binaryLayer(LOWER, LOWER_EQUALS, GREATER, GREATER_EQUALS)
+                                    .binaryLayer(LEFT_SHIFT, RIGHT_SHIFT)
                                     .binaryLayer(PLUS, MINUS)
-                                    //.binaryLayer(MULTIPLY, DIVIDE, MODULO)
+                                    .binaryLayer(MULTIPLY, DIVIDE, MODULO)
                                     .unaryLayerLeft(INVERT, MINUS, TILDE, INDEX)
                                     .unaryLayerRight(INDEX);
                         })
@@ -1920,6 +1922,14 @@ public class Parser implements Serializable {
                     return Operator.LESS;
                 case PLUS:
                     return Operator.ADD;
+                case MULTIPLY:
+                    return Operator.MULTIPLY;
+                case LEFT_SHIFT:
+                    return Operator.LEFT_SHIFT;
+                case RIGHT_SHIFT:
+                    return Operator.RIGHT_SHIFT;
+                case MODULO:
+                    return Operator.MODULO;
                 default:
                     return null;
             }

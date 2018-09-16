@@ -82,4 +82,8 @@ public class Util {
         }
         return builder.toString();
     }
+
+    public static double log2(double val){
+        return Math.log(val) / Math.log(2);
+    }
 }

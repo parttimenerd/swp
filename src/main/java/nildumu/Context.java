@@ -9,6 +9,7 @@ import swp.util.Pair;
 
 import static nildumu.DefaultMap.ForbiddenAction.*;
 import static nildumu.Lattices.*;
+import static nildumu.Lattices.B.U;
 import static nildumu.LeakageCalculation.jungEdgeGraph;
 import static nildumu.Parser.*;
 
