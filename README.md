@@ -142,21 +142,23 @@ All configurations and inputs are stored continously in the
           method body and uses the prior summary edges if a method is
           called in the body.
         - The resulting bit graph is then reduced.
-        - It supports coinduction ("mode=coind")
-          and induction ("mode=ind"), but the default is coinduction
+        - It supports coinduction (`mode=coind`)
+          and induction (`mode=ind`), but the default is to choose
+          induction for non-recursive programs and else coinduction
+          (`mode=auto`)
         - Induction starts with no edges between parameter bits and
           return bits and iterates till no new connection between a
           return bit and a parameter bit is added.
             - It only works for programs without recursion.
         - Coinduction starts with the an over approximation produced by
           another handler (`bot` property) and iterates at most a
-          configurable number of times ("maxiter" property), by default
+          configurable number of times (`maxiter` property), by default
           this number is 2147483647 (the maximum number of signed 32 bit
           integer)
         - The default reduction policy is to connect all return bits
           with all parameter bits that they depend upon
           ("reduction=basic")
-            - An improved version ("reduction=mincut") includes the
+            - An improved version (`reduction=mincut`) includes the
               minimal cut bits of the bit graph from the return to the
               parameter bits, assuming that the return bits have
               infinite weights
@@ -170,6 +172,11 @@ All configurations and inputs are stored continously in the
             - `dot`: folder to output dot files for the bit graphs of
               the methods in different iterations and the call-graph
                 - default: empty string, produces no dot files
+            - `csmaxrec`: if > 0, each sub analysis uses a call-string
+              based handler for evaluation method invocations, using
+              the computed summary edges as `bot` and the passed value
+              as `maxrec`. Likely improves precision but also increases
+              the size of the summary edges.
 - the combobox labeled *Min-Cut* allows to choose between several
   minimum-cut algorithms for the analysis
     - the JUNG version is correct and optimal

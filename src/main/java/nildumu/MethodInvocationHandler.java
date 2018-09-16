@@ -489,14 +489,17 @@ public abstract class MethodInvocationHandler {
 
         final Reduction reductionMode;
 
+        final int callStringMaxRec;
+
         Map<MethodNode, BitGraph> methodGraphs;
 
         CallGraph callGraph;
 
-        public SummaryHandler(int maxIterations, Mode mode, MethodInvocationHandler botHandler, Path dotFolder, Reduction reductionMode) {
+        public SummaryHandler(int maxIterations, Mode mode, MethodInvocationHandler botHandler, Path dotFolder, Reduction reductionMode, int callStringMaxRec) {
             this.maxIterations = maxIterations;
             this.mode = mode;
             this.reductionMode = reductionMode;
+            this.callStringMaxRec = callStringMaxRec;
             assert !(mode == Mode.INDUCTION || mode == Mode.AUTO) || (maxIterations == Integer.MAX_VALUE);
             this.botHandler = botHandler;
             this.dotFolder = dotFolder;
@@ -585,12 +588,16 @@ public abstract class MethodInvocationHandler {
         }
 
         MethodInvocationHandler createHandler(Function<MethodNode, BitGraph> curVersion){
-            return new MethodInvocationHandler() {
+            MethodInvocationHandler handler = new MethodInvocationHandler() {
                 @Override
                 public Value analyze(Context c, MethodInvocationNode callSite, List<Value> arguments) {
                     return curVersion.apply(callSite.definition).applyToArgs(c, arguments);
                 }
             };
+            if (callStringMaxRec > 0){
+                return new CallStringHandler(callStringMaxRec, handler);
+            }
+            return handler;
         }
 
         BitGraph reduce(Context context, BitGraph bitGraph){
@@ -671,12 +678,13 @@ public abstract class MethodInvocationHandler {
                         .add("bot", "basic")
                         .add("dot", "")
                         .add("mode", "auto")
-                        .add("reduction", "mincut");
+                        .add("reduction", "mincut")
+                        .add("csmaxrec", "0");
         register("summary", propSchemeCreator, ps -> {
             Path dotFolder = ps.getProperty("dot").equals("") ? null : Paths.get(ps.getProperty("dot"));
             return new SummaryHandler(ps.getProperty("mode").equals("coind") ? Integer.parseInt(ps.getProperty("maxiter")) : Integer.MAX_VALUE,
                     ps.getProperty("mode").equals("ind") ? SummaryHandler.Mode.INDUCTION : (ps.getProperty("mode").equals("auto") ? SummaryHandler.Mode.AUTO : SummaryHandler.Mode.COINDUCTION),
-                    parse(ps.getProperty("bot")), dotFolder, SummaryHandler.Reduction.valueOf(ps.getProperty("reduction").toUpperCase()));
+                    parse(ps.getProperty("bot")), dotFolder, SummaryHandler.Reduction.valueOf(ps.getProperty("reduction").toUpperCase()), Integer.parseInt(ps.getProperty("csmaxrec")));
         });
         examplePropLines.add("handler=summary;bot=basic;reduction=basic");
         examplePropLines.add("handler=summary;bot=basic;reduction=mincut");
