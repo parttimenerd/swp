@@ -38,7 +38,7 @@ public class IOValues {
 
 
     public void add(Sec<?> sec, Value value){
-        if (contains(value)){
+        if (contains(value) && !getSec(value).equals(sec)){
             throw new MultipleLevelsPerValue(value);
         }
         valuesPerSec.get(sec).add(value);

@@ -68,7 +68,7 @@ public class DefaultMap<K, V> implements Map<K, V> {
 
     @Override
     public V put(K key, V value) {
-        if (map.containsKey(key)) {
+        if (map.containsKey(key) && !map.get(key).equals(value)) {
             if (forbidValueUpdates) {
                 throw new UnsupportedOperationException(
                         String.format(
