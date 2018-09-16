@@ -26,8 +26,15 @@ public class Processor {
     }
 
     public static Context process(String program, Context.Mode mode, MethodInvocationHandler handler, boolean transformPlus){
-        Processor.transformPlus = transformPlus;
-        ProgramNode node = Parser.process(program, transformPlus);
+        return process(Parser.process(program, transformPlus), mode, handler);
+    }
+
+    public static Context process(ProgramNode node, MethodInvocationHandler handler){
+        handler.setup(node);
+        return process(node.context.forceMethodInvocationHandler(handler), node);
+    }
+
+    public static Context process(ProgramNode node, Context.Mode mode, MethodInvocationHandler handler){
         node.context.mode(mode);
         handler.setup(node);
         return process(node.context.forceMethodInvocationHandler(handler), node);

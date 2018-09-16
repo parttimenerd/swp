@@ -220,10 +220,10 @@ public class MinCutTest implements MinimalCounterexampleHook {
         }
 
         void printStats(String title){
-            double[] diffs = vals.stream().mapToDouble(p -> p.second - p.first == 0 ? 0 : ((p.second - p.first) * 1.0 / p.first)).toArray();
+            double[] diffs = vals.stream().mapToDouble(p -> p.second - p.first == 0 ? 0 : (p.second * 1.0 / p.first)).toArray();
             double mean = DoubleStream.of(diffs).sum() * 1.0 / diffs.length;
             double std = Math.sqrt(DoubleStream.of(diffs).map(d -> (d - mean) * (d - mean)).sum()) / diffs.length;
-            System.out.println(String.format("%s: runs: %d, mean diff: %2.2f, std: %2.2f", title, diffs.length, mean, std));
+            System.out.println(String.format("%s: runs: %d, mean ratio: %2.2f, std: %2.2f", title, diffs.length, mean, std));
             System.out.println(vals);
         }
 

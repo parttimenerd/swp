@@ -838,7 +838,7 @@ public class Parser implements Serializable {
      */
     public static class ProgramNode extends MJNode {
 
-        public final Context context;
+        public Context context;
 
         private final Map<Variable, Object> inputVariables = new IdentityHashMap<>();
         private final Map<Variable, Object> outputVariables = new IdentityHashMap<>();

@@ -47,7 +47,7 @@ public class CallGraph {
         }
 
         public Set<CallNode> calledCallNodes(){
-            Set<CallNode> alreadyVisited = new HashSet<>();
+            Set<CallNode> alreadyVisited = new LinkedHashSet<>();
             Queue<CallNode> queue = new ArrayDeque<>();
             queue.add(this);
             while (queue.size() > 0){
@@ -64,6 +64,18 @@ public class CallGraph {
             Set<CallNode> nodes = calledCallNodes();
             nodes.add(this);
             return nodes;
+        }
+
+        public List<CallNode> calledCallNodesAndSelfInPostOrder(){
+            return calledCallNodesAndSelfInPostOrder(new HashSet<>());
+        }
+
+        private List<CallNode> calledCallNodesAndSelfInPostOrder(Set<CallNode> alreadyVisited){
+            alreadyVisited.add(this);
+            return Stream.concat(callees.stream()
+                    .filter(n -> !alreadyVisited.contains(n))
+                    .flatMap(n -> n.calledCallNodesAndSelfInPostOrder(alreadyVisited).stream()),
+                    Stream.of(this)).collect(Collectors.toList());
         }
 
         public DotGraph createDotGraph(String name, Function<CallNode, String> label){
@@ -156,10 +168,6 @@ public class CallGraph {
         loopDepths = calcLoopDepth(mainNode, dominators);
     }
 
-    public boolean containsRecursion(){
-        return loopDepths.values().stream().anyMatch(l -> l > 0);
-    }
-
     public <T> Map<CallNode, T> worklist(
             BiFunction<CallNode, Map<CallNode, T>, T> action,
             Function<CallNode, T> bot,
@@ -178,6 +186,10 @@ public class CallGraph {
 
     public int loopDepth(MethodNode method){
         return loopDepths.get(methodToNode.get(method));
+    }
+
+    public boolean containsRecursion(){
+        return loopDepths.values().stream().anyMatch(l -> l > 0);
     }
 
     public CallNode callNode(MethodNode method){
@@ -266,7 +278,8 @@ public class CallGraph {
             Map<CallNode, T> state) {
         PriorityQueue<CallNode> queue =
                 new PriorityQueue<>(new TreeSet<>(Comparator.comparingInt(priority::apply)));
-        queue.addAll(mainNode.calledCallNodesAndSelf());
+        queue.addAll(mainNode.calledCallNodesAndSelfInPostOrder());
+        Context.log(() -> String.format("Initial order: %s", queue.toString()));
         queue.forEach(n -> state.put(n, bot.apply(n)));
         while (queue.size() > 0) {
             CallNode cur = queue.poll();

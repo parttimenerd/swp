@@ -3,11 +3,8 @@ Nildumu
 
 An experimental quantitative information flow analysis on a PDG like
 structure for a while-language with functions, one data type (`int`)
-and a c like syntax. Example programs can be found in the `examples`
+and a C like syntax. Example programs can be found in the `examples`
 directory.
-
-The implementation is partly inspired (and based) on the compiler lab
-material (https://pp.ipd.kit.edu/lehre/WS201617/compprakt/)
 
 It is based, and developed alongside, my master thesis.
 A working draft can be found at https://git.scc.kit.edu/uqddy/ma.
@@ -22,7 +19,7 @@ graph.
 
 Language
 --------
-- the language has a c like syntax
+- the language has a C like syntax
 - it supports `if` and `while` statements that only consider the first
 bit of the result of their conditional expression
 - it supports different widths for the data type `int`, the default

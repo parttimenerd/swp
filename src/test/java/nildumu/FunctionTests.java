@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.*;
 import org.junit.jupiter.params.provider.*;
 
+import nildumu.ui.JungPanel;
+
 import static java.time.Duration.ofSeconds;
 import static nildumu.Processor.process;
 import static org.junit.jupiter.api.Assertions.*;
@@ -116,8 +118,7 @@ l output int o = fib(h);
     @CsvSource({
             "'handler=basic', 'o[1]=u;o[2]=u;h[1]=u;h[2]=0'",
             "'handler=call_string', 'o[1]=1'",
-            "'handler=call_string;maxrec=3', 'o[1]=1'",
-            "'handler=summary', 'o[1]=1'"
+            "'handler=call_string;maxrec=3', 'o[1]=1'"
     })
     public void testDepsOnFunctionResult(String handler, String bitComp){
         Lattices.Bit.toStringGivesBitNo = true;
@@ -319,6 +320,47 @@ l output int o = fib(h);
         parse(program, MethodInvocationHandler.parse("handler=summary;maxiter=2;bot=basic;dot=dots23.dot"));
     }
 
+    @RepeatedTest(value = 3)
+    public void testFunctionChain(){
+        parse("h input int h = 0b0u;\n" +
+                "int f1(int a){\n" +
+                "\treturn a;\n" +
+                "}\n" +
+                "int f2(int a){\n" +
+                "\treturn f1(a) & f1(a) & f1(a);\n" +
+                "}\n" +
+                "int f3(int a){\n" +
+                "\treturn f2(a) & f2(a) & f2(a);\n" +
+                "}\n" +
+                "int f4(int a){\n" +
+                "\treturn f3(a) & f3(a) & f3(a);\n" +
+                "}\n" +
+                "l output int o = f4(h);", "summary").leaks(1).run();
+    }
+
+    @Test
+    public void testFunctionChain_1(){
+        String program ="h input int h = 0bu;\n" +
+                "int f1(int a){\n" +
+                "\treturn a;\n" +
+                "}\n" +
+                "int f2(int a){\n" +
+                "\treturn f1(a);\n" +
+                "}\n" +
+                "l output int o = f2(h);";
+        ProgramNode node = Parser.process(program);
+        Context.LOG.setLevel(Level.FINE);
+        Context c1 = Processor.process(node, Context.Mode.LOOP, MethodInvocationHandler.parse("handler=summary;dot=dots1"));
+        Context.LOG.setLevel(Level.INFO);
+        //node = Parser.process(program);
+        //Context c2 = Processor.process(node, MethodInvocationHandler.parse("handler=summary"));
+        //new Thread(() -> JungPanel.show(c1.getJungGraphForVisu(c1.sl.bot()))).start();
+
+        //JungPanel.show(c2.getJungGraphForVisu(c1.sl.bot()));
+        new ContextMatcher(c1).leaks(1).run();
+        //new ContextMatcher(c2).leaks(1).run();
+    }
+
     static ContextMatcher parse(String program){
         return parse(program, MethodInvocationHandler.createDefault());
     }
@@ -339,7 +381,7 @@ l output int o = fib(h);
     }
 
     static Stream<String> handlers(){
-        return Stream.concat(Stream.of("handler=basic", "handler=call_string;maxrec=1;bot=basic", "handler=call_string;maxrec=2;bot=basic"), MethodInvocationHandler.getExamplePropLines().stream());
+        return Stream.concat(Stream.of("handler=basic", "handler=call_string;maxrec=1;bot=basic", "handler=call_string;maxrec=2;bot=basic", "summary"), MethodInvocationHandler.getExamplePropLines().stream());
     }
 
     static Stream<Arguments> handlersWBitWidth(){

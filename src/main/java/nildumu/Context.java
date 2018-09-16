@@ -285,7 +285,7 @@ public class Context {
         throw new InvariantViolationError(String.join("\n", errorMessages));
     }
 
-    public void log(Supplier<String> msgProducer){
+    public static void log(Supplier<String> msgProducer){
         if (LOG.isLoggable(Level.FINE)){
             System.out.println(msgProducer.get());
         }
@@ -695,5 +695,10 @@ public class Context {
 
     public int numberOfinfiniteWeightNodes(){
         return weightMap.size();
+    }
+
+    public void resetNodeValueStates(){
+        nodeValueStates.clear();
+        nodeValueState = nodeValueStates.get(currentCallPath);
     }
 }
