@@ -941,9 +941,6 @@ public class Lattices {
         }
 
         public String repr() {
-            if (!hasDependencies()) {
-                return bs.toString(val);
-            }
             String name = "";
             if (value != null && !value.description.isEmpty()){
                 name = String.format("%s[%d]", value.node() == null ? value.description() : value.node().getTextualId(), valueIndex);

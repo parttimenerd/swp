@@ -98,6 +98,11 @@ All configurations and inputs are stored continously in the
     - run the analysis, changes to `…` during the run of the analysis
 - the button labeled ⏹
     - abort the current run of the analysis
+- the button `Graph view`
+    - opens a new frame to view different graphs
+    - the graphs are not created in the `MIN` output mode
+    - zooming in the graph works by pressing the *Shift* key and
+      moving the mouse up or down while pressing an arbitrary mouse key
 - the *Mode* combobox
     - *basic*: use the basic version of the analysis that only supports
       if-statement and doesn't take into account that conditions fixate

@@ -6,9 +6,12 @@ import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
 
-import io.github.livingdocumentation.dotdiagram.DotGraph;
+import guru.nidi.graphviz.attribute.*;
+import guru.nidi.graphviz.engine.*;
+import guru.nidi.graphviz.model.*;
 import swp.util.Pair;
 
+import static guru.nidi.graphviz.model.Factory.*;
 import static nildumu.CallGraph.CallNode;
 import static nildumu.Context.*;
 import static nildumu.Lattices.B.U;
@@ -374,44 +377,22 @@ public abstract class MethodInvocationHandler {
             return MinCut.compute(outputBits, inputBits, b -> outputBits.contains(b) ? outputWeight : context.weight(b)).minCut;
         }
 
-        public DotGraph createDotGraph(String name){
-            DotGraph dotGraph = new DotGraph(name);
-            DotGraph.Digraph g = dotGraph.getDigraph();
-            createDotGraph(g.addCluster(name), name);
-            return dotGraph;
+        private Graph createDotGraph(String name, boolean withMinCut){
+            return DotRegistry.createDotGraph(context, name, IntStream.range(0, parameters.size())
+                    .mapToObj(i -> new DotRegistry.Anchor(String.format("param %d", i), parameters.get(i))
+                    ).collect(Collectors.toList()),
+                    new DotRegistry.Anchor("return", returnValue),
+                    withMinCut ? minCutBits(returnValue.bitSet(), parameterBits, INFTY) : Collections.emptySet());
         }
 
-        private DotGraph.Cluster createDotGraph(DotGraph.Cluster g, String name){
-            return createDotGraph(g, name, (b1, b2) -> "");
-        }
-
-        private DotGraph.Cluster createDotGraph(DotGraph.Cluster g, String name, BiFunction<Bit, Bit, String> edgeLabel){
-            Set<Bit> alreadyVisited = new HashSet<>();
-            Function<Bit, String> dotLabel = b -> (context.weight(b) == INFTY ? "∞" : context.weight(b)) + "|" + b.uniqueId() + ": " + b.toString().replace("|", "or");
-            for (Bit bit : returnValue) {
-                bl.walkBits(bit, b -> {
-                    DotGraph.Node node = g.addNode(b.uniqueId());
-                    node.setLabel(dotLabel.apply(b));
-                    b.deps().forEach(d -> g.addAssociation(b.uniqueId(), d.uniqueId()).setLabel(edgeLabel.apply(d, d )));
-                }, b -> false, alreadyVisited);
+        public void writeDotGraph(Path folder, String name, boolean withMinCut){
+            Path path = folder.resolve(name + ".dot");
+            try {
+                Files.createDirectories(folder);
+                Graphviz.fromGraph(createDotGraph(name, withMinCut)).render(Format.PLAIN).toFile(path.toFile());
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-            vl.walkBits(parameters, b -> {
-                if (!alreadyVisited.contains(b)){
-                    g.addNode(b.uniqueId());
-                    alreadyVisited.add(b);
-                }
-            });
-            g.addNode("return").setLabel("return");
-            returnValue.forEach(b -> g.addAssociation("return", b.uniqueId()));
-            g.addNode(name).setLabel(name);
-            for (int i = 0; i < parameters.size(); i++) {
-                Value param = parameters.get(i);
-                String nodeId = String.format("param %d", i);
-                g.addNode(nodeId).setLabel(String.format("param %d", i));
-                param.forEach(b -> g.addAssociation(b.uniqueId(), nodeId));
-                g.addAssociation(nodeId, name);
-            }
-            return g;
         }
 
         @Override
@@ -421,22 +402,6 @@ public abstract class MethodInvocationHandler {
                 return paramBitsPerReturnValue.equals(((BitGraph)obj).paramBitsPerReturnValue);
             }
             return false;
-        }
-
-        public void writeDotGraph(Path folder, String name){
-            writeDotGraph(folder, name, (b1, b2) -> "");
-        }
-
-        public void writeDotGraph(Path folder, String name, BiFunction<Bit, Bit, String> edgeLabel){
-            Path path = folder.resolve(name + ".dot");
-
-            String graph = createDotGraph(name).render();
-            try {
-                Files.createDirectories(folder);
-                Files.write(path, Arrays.asList(graph.split("\n")));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
     }
 
@@ -509,17 +474,18 @@ public abstract class MethodInvocationHandler {
         public void setup(ProgramNode program) {
             Mode _mode = mode;
             callGraph = new CallGraph(program);
-            if (dotFolder != null){
-                callGraph.writeDotGraph(dotFolder, "call_graph");
+            if (_mode == Mode.AUTO){
+                _mode = Mode.INDUCTION;
             }
-            if (callGraph.containsRecursion()){
+           /* if (callGraph.containsRecursion()){
                 if (_mode == Mode.AUTO){
                     _mode = Mode.COINDUCTION;
                 }
                 if (_mode == Mode.INDUCTION){
-                    throw new MethodInvocationHandlerInitializationError("Induction cannot be used for programs with reduction");
+                    System.err.println("Induction cannot be used for programs with reduction");
+                  //  throw new MethodInvocationHandlerInitializationError("Induction cannot be used for programs with reduction");
                 }
-            }
+            }*/
             Mode usedMode = _mode;
             Context c = program.context;
             Map<MethodNode, MethodInvocationNode> callSites = new DefaultMap<>((map, method) -> {
@@ -536,21 +502,29 @@ public abstract class MethodInvocationHandler {
                 }
                 iteration.val += 1;
                 BitGraph graph = methodIteration(program.context, callSites.get(node.method), handler, s.get(node).parameters);
-                if (dotFolder != null) {
-                    graph.writeDotGraph(dotFolder, iteration.val + "_" + node.method.name);
+                String name = String.format("%3d %s", iteration.val, node.method.name);
+                if (dotFolder != null){
+                    graph.writeDotGraph(dotFolder, name, true);
                 }
+                DotRegistry.get().store("summary", name,
+                        () -> () -> graph.createDotGraph("", true));
                 BitGraph reducedGraph = reduce(c, graph);
-                if (dotFolder != null) {
-                    reducedGraph.writeDotGraph(dotFolder, "r" + iteration.val + "_" + node.method.name);
+                if (dotFolder != null){
+                    graph.writeDotGraph(dotFolder, name + " [reduced]", false);
                 }
+                DotRegistry.get().store("summary",  name + " [reduced]",
+                        () -> () -> reducedGraph.createDotGraph("", false));
                 return reducedGraph;
             }, node ->  {
                 BitGraph graph = bot(program, node.method, callSites, usedMode);
-                        if (dotFolder != null) {
-                            graph.writeDotGraph(dotFolder, iteration.val + "_" + node.method.name);
-                        }
-                        return graph;
-                    }
+                String name = String.format("%3d %s", iteration.val, node.method.name);
+                if (dotFolder != null){
+                    graph.writeDotGraph(dotFolder, name, false);
+                }
+                DotRegistry.get().store("summary", name,
+                        () -> () -> graph.createDotGraph("", false));
+                return graph;
+            }
             , node -> node.getCallers().stream().filter(n -> !n.isMainNode).collect(Collectors.toSet()),
             state).entrySet().stream().collect(Collectors.toMap(e -> e.getKey().method, Map.Entry::getValue));
         }
@@ -676,10 +650,10 @@ public abstract class MethodInvocationHandler {
         Consumer<PropertyScheme> propSchemeCreator = s ->
                 s.add("maxiter", "1")
                         .add("bot", "basic")
-                        .add("dot", "")
                         .add("mode", "auto")
                         .add("reduction", "mincut")
-                        .add("csmaxrec", "0");
+                        .add("csmaxrec", "0")
+                        .add("dot", "");
         register("summary", propSchemeCreator, ps -> {
             Path dotFolder = ps.getProperty("dot").equals("") ? null : Paths.get(ps.getProperty("dot"));
             return new SummaryHandler(ps.getProperty("mode").equals("coind") ? Integer.parseInt(ps.getProperty("maxiter")) : Integer.MAX_VALUE,

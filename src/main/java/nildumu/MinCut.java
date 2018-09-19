@@ -6,7 +6,6 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import io.github.livingdocumentation.dotdiagram.DotGraph;
 import swp.util.Pair;
 
 import static nildumu.Context.INFTY;
@@ -383,7 +382,7 @@ public class MinCut {
                 return p(path.size() > 0 ? df : 0, path);
             }
 
-            void writeDotGraph(String name, Bit source, Bit sink, Pair<Long, List<Bit>> roundRes){
+           /* void writeDotGraph(String name, Bit source, Bit sink, Pair<Long, List<Bit>> roundRes){
                 Path path = Paths.get(name + ".dot");
                 DotGraph dotGraph = new DotGraph(name);
                 DotGraph.Digraph g = dotGraph.getDigraph();
@@ -415,20 +414,20 @@ public class MinCut {
                     b.deps().forEach(d -> g.addAssociation(b.hashCode(), d.hashCode()).setLabel(info(b).getFlow(d) + ""));
                 }, b -> b == sink, new HashSet<>());
                 return g;
-            }
+            }*/
 
             ComputationResult findMinCut(){
                 Pair<Long, List<Bit>> roundRes;
-                if (DEBUG) {
+                /*if (DEBUG) {
                     writeDotGraph("0", source, sink, null);
-                }
+                }*/
                 int iteration = 0;
                 long flow = 0;
                 while ((roundRes = augmentPath()).first > 0){
                     iteration++;
-                    if (DEBUG) {
+                    /*if (DEBUG) {
                         writeDotGraph(iteration + "", source, sink, roundRes);
-                    }
+                    }*/
                     flow += roundRes.first;
                 }
                 // reachable from source
@@ -589,24 +588,7 @@ public class MinCut {
         if (sec == context.sl.top()){
             return new ComputationResult(Collections.emptySet(), 0);
         }
-        Set<Bit> sources = context
-                .sl
-                .elements()
-                .stream()
-                .map(s -> (Sec<?>) s)
-                .filter(s -> ((Lattice) context.sl).lowerEqualsThan(s, sec))
-                .flatMap(s -> context.output.getBits((Sec) s).stream())
-                .collect(Collectors.toSet());
-        // an attacker at level sec can see all outputs with level <= sec
-        Set<Bit> sinks = context
-                .sl
-                .elements()
-                .stream()
-                .map(s -> (Sec<?>) s)
-                .filter(s -> !((Lattice) context.sl).lowerEqualsThan(s, sec))
-                .flatMap(s -> context.input.getBits((Sec) s).stream())
-                .collect(Collectors.toSet());
-        return compute(sources, sinks, context::weight);
+        return compute(context.sources(sec), context.sinks(sec), context::weight);
     }
 
     private static Context con;

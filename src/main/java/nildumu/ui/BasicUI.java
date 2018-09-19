@@ -151,6 +151,9 @@ public class BasicUI {
         transformPlusCheckBox.setMnemonic('|');
         transformPlusCheckBox.setDisplayedMnemonicIndex(4);
         panel7.add(transformPlusCheckBox, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        launchDotsButton = new JButton();
+        launchDotsButton.setText("Graph view");
+        panel7.add(launchDotsButton, new GridConstraints(0, 4, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         final JLabel label1 = new JLabel();
         label1.setText("Mode");
         panel7.add(label1, new GridConstraints(0, 5, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
@@ -304,6 +307,7 @@ public class BasicUI {
     private JComboBox minCutAlgoComboBox;
     private JComboBox fontSizeMultiplierComboBox;
     private JLabel bitWidthLabel;
+    private JButton launchDotsButton;
     private Context context = null;
     private DocumentListener documentListener;
     private ResponsiveTimer graphViewRefreshTimer;
@@ -317,6 +321,7 @@ public class BasicUI {
     private final String VAR_FILE = "gui.config";
     private Properties properties;
     private ResponsiveTimer propertiesWriteTimer;
+    private Set<DotFrame> launchedDotFrames = new HashSet<>();
 
     public BasicUI() {
         properties = new Properties();
@@ -522,6 +527,18 @@ public class BasicUI {
         fontSizeMultiplierComboBox.addActionListener(l -> {
             changeFontSize(Float.parseFloat(fontSizeMultiplierComboBox.getSelectedItem().toString().replace("%", "")) / 100);
         });
+        launchDotsButton.addActionListener(e -> {
+            DotFrame dot = DotFrame.launch(this);
+            Map<String, LinkedHashMap<String, DotRegistry.DotFile>> filesPerTopic =
+                    DotRegistry.get().getFilesPerTopic();
+            if (filesPerTopic.size() > 0) {
+                LinkedHashMap<String, DotRegistry.DotFile> first = filesPerTopic.values().iterator().next();
+                if (first.size() > 0) {
+                    DotRegistry.DotFile file = first.values().iterator().next();
+                    dot.set(file.topic, file.name);
+                }
+            }
+        });
     }
 
     public void processAndUpdate(String program) {
@@ -536,6 +553,11 @@ public class BasicUI {
         }
         if (nodeSelectHighlightTag != null) {
             inputArea.getHighlighter().removeHighlight(nodeSelectHighlightTag);
+        }
+        if (shouldUpdateVariableValueTable()) {
+            DotRegistry.get().enable();
+        } else {
+            DotRegistry.get().disable();
         }
         try {
             Parser.ProgramNode programNode = Parser.process(program, transformPlusCheckBox.isSelected());
@@ -563,11 +585,15 @@ public class BasicUI {
                 updateVariableValueTable(context);
             }
             if (shouldUpdateGraph()) {
-                System.out.println("Yeah…");
                 graphViewRefreshTimer.request();
             }
+            context.sl.elements().forEach(s -> {
+                DotRegistry.get().store("main", "Attacker level: " + s,
+                        () -> () -> LeakageCalculation.visuDotGraph(context, "", s));
+            });
             updateLeakageTable(c);
             context.checkInvariants();
+            launchedDotFrames.forEach(DotFrame::update);
         } catch (LocatedSWPException e) {
             parserErrorLabel.setText(e.getMessage());
             Location errorLocation = e.errorToken.location;
@@ -1012,16 +1038,17 @@ public class BasicUI {
         return props;
     }
 
-    private Map<Object, Integer> oldFontSizes = new HashMap<>();
+    private static Map<Object, Integer> oldFontSizes = new HashMap<>();
 
     private void changeFontSize(float multiplier) {
         //setFontSizeDefault(multiplier);
         changeFontSize(multiplier, $$$getRootComponent$$$());
         setVarContent("fontMultiplier", multiplier + "");
         //rootPanel.invalidate();
+        launchedDotFrames.forEach(d -> changeFontSize(multiplier, d.getRootPanel()));
     }
 
-    private void changeFontSize(float multiplier, Component component) {
+    public static void changeFontSize(float multiplier, Component component) {
         if (!oldFontSizes.containsKey(component)) {
             oldFontSizes.put(component, component.getFont().getSize());
         }
@@ -1029,5 +1056,13 @@ public class BasicUI {
         if (component instanceof Container) {
             Stream.of(((Container) component).getComponents()).forEach(c -> changeFontSize(multiplier, c));
         }
+    }
+
+    public void addDotFrame(DotFrame dotFrame) {
+        launchedDotFrames.add(dotFrame);
+    }
+
+    public void removeDotFrame(DotFrame dotFrame) {
+        launchedDotFrames.remove(dotFrame);
     }
 }

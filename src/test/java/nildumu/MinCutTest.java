@@ -264,7 +264,7 @@ public class MinCutTest implements MinimalCounterexampleHook {
     @Override
     public void handle(Object[] counterexample, Runnable action) {
         MinCut.DEBUG = true;
-        ((BitGraphWrapper)counterexample[0]).g.writeDotGraph(Paths.get(""), "blub");
+        //((BitGraphWrapper)counterexample[0]).g.writeDotGraph(Paths.get(""), "blub");
         checkMinCutGE((BitGraphWrapper) counterexample[0]);
     }
 

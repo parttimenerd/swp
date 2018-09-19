@@ -7,8 +7,11 @@ import java.util.stream.Collectors;
 import edu.uci.ics.jung.algorithms.flows.EdmondsKarpMaxFlow;
 import edu.uci.ics.jung.graph.*;
 import edu.uci.ics.jung.graph.util.EdgeType;
+import guru.nidi.graphviz.attribute.Color;
+import guru.nidi.graphviz.model.Graph;
 import swp.util.Pair;
 
+import static guru.nidi.graphviz.attribute.Style.FILLED;
 import static nildumu.Context.INFTY;
 import static nildumu.Lattices.*;
 
@@ -454,5 +457,12 @@ public class LeakageCalculation {
     public static JungEdgeGraph jungEdgeGraph(Context context) {
         Rules rules = rules(context);
         return new JungEdgeGraph(rules, EdgeGraph.fromRules(rules));
+    }
+
+    public static Graph visuDotGraph(Context context, String name, Sec<?> sec){
+        Set<Bit> minCut = context.getLeakageGraph().minCutBits(sec);
+        return DotRegistry.createDotGraph(context, name,
+                Collections.singletonList(new DotRegistry.Anchor("input", context.sinks(sec).stream().collect(Value.collector()))),
+                new DotRegistry.Anchor("output", context.sources(sec).stream().collect(Value.collector())), minCut);
     }
 }

@@ -465,7 +465,7 @@ public class Context {
         if (MinCut.usedAlgo == MinCut.Algo.JUNG){
             return getLeakageGraph().leakages().entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey,
-                            e ->new MinCut.ComputationResult(leakageGraph.minCutBits(e.getKey()), e.getValue())));
+                            e -> new MinCut.ComputationResult(leakageGraph.minCutBits(e.getKey()), e.getValue())));
         }
         return MinCut.compute(this);
     }
@@ -701,5 +701,26 @@ public class Context {
     public void resetNodeValueStates(){
         nodeValueStates.clear();
         nodeValueState = nodeValueStates.get(currentCallPath);
+    }
+
+    public Set<Bit> sources(Sec<?> sec){
+        return  sl
+                .elements()
+                .stream()
+                .map(s -> (Sec<?>) s)
+                .filter(s -> ((Lattice) sl).lowerEqualsThan(s, sec))
+                .flatMap(s -> output.getBits((Sec) s).stream())
+                .collect(Collectors.toSet());
+    }
+
+    public Set<Bit> sinks(Sec<?> sec){
+        // an attacker at level sec can see all outputs with level <= sec
+        return   sl
+                .elements()
+                .stream()
+                .map(s -> (Sec<?>) s)
+                .filter(s -> !((Lattice) sl).lowerEqualsThan(s, sec))
+                .flatMap(s -> input.getBits((Sec) s).stream())
+                .collect(Collectors.toSet());
     }
 }

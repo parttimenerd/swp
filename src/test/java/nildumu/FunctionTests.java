@@ -269,7 +269,7 @@ l output int o = fib(h);
         ProgramNode program = Parser.process("int bla(){return bla()} bla()");
         MethodNode blaMethod = program.getMethod("bla");
         CallGraph g = new CallGraph(program);
-        g.writeDotGraph(Paths.get("tmp"), "call_graph");
+        //g.writeDotGraph(Paths.get("tmp"), "call_graph");
         assertAll(
                 () -> assertEquals(1, g.loopDepth(blaMethod), "Wrong loop depth for bla()"),
                 () -> assertTrue(g.dominators(blaMethod).contains(blaMethod), "bla() dominates itself")
@@ -281,7 +281,7 @@ l output int o = fib(h);
         ProgramNode program = Parser.process("int f() { g(); z ()} int g(){ h(); g(); f() } int h(){ g() } int z(){} f()");
         MethodNode blaMethod = program.getMethod("bla");
         CallGraph g = new CallGraph(program);
-        g.writeDotGraph(Paths.get("tmp"), "call_graph2");
+        //g.writeDotGraph(Paths.get("tmp"), "call_graph2");
         assertAll(
                 () -> assertEquals(2, g.loopDepth(program.getMethod("h")), "Wrong loop depth for h"),
                 () -> assertTrue(g.dominators(program.getMethod("h")).contains(program.getMethod("f")), "f() dominates h()")
@@ -381,7 +381,7 @@ l output int o = fib(h);
     }
 
     static Stream<String> handlers(){
-        return Stream.concat(Stream.of("handler=basic", "handler=call_string;maxrec=1;bot=basic", "handler=call_string;maxrec=2;bot=basic", "summary"), MethodInvocationHandler.getExamplePropLines().stream());
+        return Stream.concat(Stream.of("handler=basic", "handler=call_string;maxrec=1;bot=basic", "handler=call_string;maxrec=2;bot=basic", "summary","handler=summary;mode=ind"), MethodInvocationHandler.getExamplePropLines().stream());
     }
 
     static Stream<Arguments> handlersWBitWidth(){

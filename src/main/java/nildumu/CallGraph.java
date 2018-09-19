@@ -6,10 +6,13 @@ import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
 
-import io.github.livingdocumentation.dotdiagram.DotGraph;
+import guru.nidi.graphviz.attribute.*;
+import guru.nidi.graphviz.model.Graph;
+import guru.nidi.graphviz.model.Node;
 import swp.lexer.Location;
 import swp.parser.lr.BaseAST;
 
+import static guru.nidi.graphviz.model.Factory.*;
 import static nildumu.Parser.*;
 import static nildumu.Util.Box;
 
@@ -78,26 +81,11 @@ public class CallGraph {
                     Stream.of(this)).collect(Collectors.toList());
         }
 
-        public DotGraph createDotGraph(String name, Function<CallNode, String> label){
-            DotGraph dotGraph = new DotGraph("");
-            DotGraph.Digraph g = dotGraph.getDigraph();
-            Set<CallNode> nodes = calledCallNodesAndSelf();
-            nodes.forEach(n -> g.addNode(n).setLabel(label.apply(n)));
-            nodes.forEach(n -> {
-                n.callees.forEach(n2 -> g.addAssociation(n, n2));
-            });
-            return dotGraph;
-        }
-
-        public void writeDotGraph(Path folder, String name, Function<CallNode, String> label){
-            Path path = folder.resolve(name + ".dot");
-            String graph = createDotGraph(name, label).render();
-            try {
-                Files.createDirectories(folder);
-                Files.write(path, Arrays.asList(graph.split("\n")));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        public Graph createDotGraph(Function<CallNode, Attributes> attrSupplier){
+            return graph().graphAttr().with(RankDir.TOP_TO_BOTTOM).directed().with((Node[])calledCallNodesAndSelf()
+                    .stream().map(n -> node(n.method.name)
+                            .link((String[])n.callees.stream()
+                            .map(m -> m.method.name).toArray(i -> new String[i])).with().with(attrSupplier.apply(n))).toArray(i -> new Node[i]));
         }
 
         public Set<CallNode> getCallees() {
@@ -166,6 +154,8 @@ public class CallGraph {
                         });
         dominators = dominators(mainNode);
         loopDepths = calcLoopDepth(mainNode, dominators);
+        DotRegistry.get().store("summary", "call-graph",
+                () -> () -> mainNode.createDotGraph(n -> Records.of(loopDepths.get(n) + "", n.method.name)));
     }
 
     public <T> Map<CallNode, T> worklist(
@@ -174,10 +164,6 @@ public class CallGraph {
             Function<CallNode, Set<CallNode>> next,
             Map<CallNode, T> state) {
         return worklist(mainNode, action, bot, next, loopDepths::get, state);
-    }
-
-    public void writeDotGraph(Path folder, String name){
-        mainNode.writeDotGraph(folder, name, n -> loopDepths.get(n) + "|" + n.method.toString());
     }
 
     public Set<MethodNode> dominators(MethodNode method){

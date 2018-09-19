@@ -653,7 +653,7 @@ public interface Operator {
         IntStream indexesWithBitValue(Value value, B b){
             IntStream.Builder ints = IntStream.builder();
             int j = value.size() - 1;
-            while (j > 1 && value.get(j).val() == b) {
+            while (j >= 1 && value.get(j).val() == b) {
                 ints.add(j);
                 j--;
             }
@@ -662,7 +662,7 @@ public interface Operator {
 
         @Override
         public DependencySet computeDataDependencies(int i, Value x, Value y, List<Lattices.B> computedBitValues) {
-            if (i > 0) {
+            if (i > 1) {
                 return ds.bot();
             }
             if (computedBitValues.get(0).isConstant()){
@@ -691,7 +691,7 @@ public interface Operator {
                 @Override
                 public Mods assumeZero(Context c, Bit r, Bit a) { // x >= y
                     if (x.isNonNegative()){ // y <= x && 0 <= x => y is upper bounded by x
-                        return indexesWithBitValue(y, ZERO).mapToObj(y::get).map(yi -> c.repl(yi, bl.create(ZERO))).collect(Mods.collector());
+                        return indexesWithBitValue(x, ZERO).mapToObj(y::get).map(yi -> c.repl(yi, bl.create(ZERO))).collect(Mods.collector());
                     }
                     if (x.isNegative()){ // y <= x < 0 => y is negative too
                         return c.repl(y.signBit(), bl.create(ONE));
@@ -902,7 +902,7 @@ public interface Operator {
         }
     };
 
-    static final BinaryOperator LEFT_SHIFT = new BinaryOperator("+") {
+    static final BinaryOperator LEFT_SHIFT = new BinaryOperator("<<") {
         @Override
         Value compute(Context c, Value first, Value second) {
             if (second.isConstant()){
@@ -924,7 +924,7 @@ public interface Operator {
         }
     };
 
-    static final BinaryOperator RIGHT_SHIFT = new BinaryOperator("+") {
+    static final BinaryOperator RIGHT_SHIFT = new BinaryOperator(">>") {
 
 
         @Override

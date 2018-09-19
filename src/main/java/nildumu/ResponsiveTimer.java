@@ -11,7 +11,7 @@ public class ResponsiveTimer {
 
     private final Runnable task;
 
-    private final int checkInterval = 10;
+    private final int checkInterval;
     private final int initialDelay = 10;
     private long counter = initialDelay;
     private long delay = initialDelay;
@@ -27,9 +27,14 @@ public class ResponsiveTimer {
     }
 
     public ResponsiveTimer(Runnable task, Runnable startHandler, Consumer<Duration> finishedHandler) {
+        this(task, startHandler, finishedHandler, 20);
+    }
+
+    public ResponsiveTimer(Runnable task, Runnable startHandler, Consumer<Duration> finishedHandler, int checkInterval) {
         this.task = task;
         this.startHandler = startHandler;
         this.finishedHandler = finishedHandler;
+        this.checkInterval = checkInterval;
     }
 
     public void start(){
