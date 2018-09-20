@@ -2,7 +2,6 @@ package swp.util;
 
 import java.io.Serializable;
 import java.util.Objects;
-import java.util.stream.Stream;
 
 /**
  * Simple implementations of tuples

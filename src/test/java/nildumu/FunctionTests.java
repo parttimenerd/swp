@@ -1,22 +1,18 @@
 package nildumu;
 
-import java.nio.file.Paths;
-import java.time.Duration;
-import java.util.logging.Level;
-import java.util.stream.*;
-
 import org.junit.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.*;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.*;
 
-import nildumu.ui.JungPanel;
+import java.util.logging.Level;
+import java.util.stream.Stream;
 
 import static java.time.Duration.ofSeconds;
+import static nildumu.Parser.*;
 import static nildumu.Processor.process;
 import static org.junit.jupiter.api.Assertions.*;
-import static nildumu.Parser.*;
 
 public class FunctionTests {
 

@@ -9,8 +9,6 @@ import swp.util.Pair;
 
 import static nildumu.DefaultMap.ForbiddenAction.*;
 import static nildumu.Lattices.*;
-import static nildumu.Lattices.B.U;
-import static nildumu.LeakageCalculation.jungEdgeGraph;
 import static nildumu.Parser.*;
 
 /**
@@ -452,26 +450,14 @@ public class Context {
         }
     }
 
-    private LeakageCalculation.AbstractLeakageGraph leakageGraph = null;
+    private Map<Sec<?>, MinCut.ComputationResult> leaks = null;
 
-    public LeakageCalculation.AbstractLeakageGraph getLeakageGraph(){
-        //if (leakageGraph == null){
-            leakageGraph = jungEdgeGraph(this);
-        //}
-        return leakageGraph;
-    }
 
     public Map<Sec<?>, MinCut.ComputationResult> computeLeakage(){
-        if (MinCut.usedAlgo == MinCut.Algo.JUNG){
-            return getLeakageGraph().leakages().entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey,
-                            e -> new MinCut.ComputationResult(leakageGraph.minCutBits(e.getKey()), e.getValue())));
+        if (leaks == null){
+            leaks = MinCut.compute(this);
         }
-        return MinCut.compute(this);
-    }
-
-    public LeakageCalculation.JungGraph getJungGraphForVisu(Sec<?> secLevel){
-        return new LeakageCalculation.JungGraph(this, getLeakageGraph().rules, secLevel, getLeakageGraph().minCutBits(secLevel));
+        return leaks;
     }
 
     public Set<MJNode> nodes(){

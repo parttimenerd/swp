@@ -1,14 +1,9 @@
 package nildumu;
 
-import swp.util.Pair;
-
 import java.time.temporal.ValueRange;
-import java.util.*;
-import java.util.function.*;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
+import java.util.stream.*;
+
+import swp.util.Pair;
 
 import static nildumu.Lattices.B.*;
 import static nildumu.Util.set;

@@ -4,8 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.*;
 
-import static nildumu.Processor.process;
 import static nildumu.Lattices.*;
+import static nildumu.Processor.process;
 
 public class BasicTests {
 

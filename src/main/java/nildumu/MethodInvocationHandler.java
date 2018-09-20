@@ -6,12 +6,10 @@ import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
 
-import guru.nidi.graphviz.attribute.*;
 import guru.nidi.graphviz.engine.*;
-import guru.nidi.graphviz.model.*;
+import guru.nidi.graphviz.model.Graph;
 import swp.util.Pair;
 
-import static guru.nidi.graphviz.model.Factory.*;
 import static nildumu.CallGraph.CallNode;
 import static nildumu.Context.*;
 import static nildumu.Lattices.B.U;
@@ -597,7 +595,6 @@ public abstract class MethodInvocationHandler {
         }
 
         BitGraph minCutReduce(Context context, BitGraph bitGraph) {
-            boolean isReachable = bitGraph.calcReachableBits(bitGraph.returnValue.get(1), bitGraph.parameters.get(0).bitSet()).size() > 0;
             Set<Bit> anchorBits = new HashSet<>(bitGraph.parameterBits);
             Set<Bit> minCutBits = bitGraph.minCutBits(bitGraph.returnValue.bitSet(), bitGraph.parameterBits, INFTY);
             anchorBits.addAll(minCutBits);

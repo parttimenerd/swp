@@ -2,17 +2,12 @@ package swp;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 import swp.lexer.Lexer;
-import swp.lexer.automata.AutomatonLexer;
-import swp.lexer.automata.LexerDescriptionParser;
-import swp.lexer.automata.Table;
+import swp.lexer.automata.*;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class LexerDescriptionParserTest {
 

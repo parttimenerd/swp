@@ -6,8 +6,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.*;
 
-import static nildumu.Lattices.bs;
-import static nildumu.Lattices.vl;
+import static nildumu.Lattices.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ContextMatcher {

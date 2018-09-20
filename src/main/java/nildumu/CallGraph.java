@@ -1,13 +1,11 @@
 package nildumu;
 
-import java.io.IOException;
-import java.nio.file.*;
 import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
 
 import guru.nidi.graphviz.attribute.*;
-import guru.nidi.graphviz.model.Graph;
+import guru.nidi.graphviz.model.*;
 import guru.nidi.graphviz.model.Node;
 import swp.lexer.Location;
 import swp.parser.lr.BaseAST;

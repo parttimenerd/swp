@@ -3,7 +3,6 @@ package nildumu;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.*;
 import java.util.stream.Collectors;
 
@@ -12,7 +11,6 @@ import guru.nidi.graphviz.engine.*;
 import guru.nidi.graphviz.model.*;
 
 import static guru.nidi.graphviz.attribute.Attributes.attr;
-import static guru.nidi.graphviz.attribute.Style.FILLED;
 import static guru.nidi.graphviz.model.Factory.*;
 import static nildumu.Context.INFTY;
 import static nildumu.Lattices.*;
@@ -79,7 +77,7 @@ public class DotRegistry {
 
     private boolean enabled = false;
 
-    private Map<String, LinkedHashMap<String, DotFile>> filesPerTopic = new ConcurrentHashMap<>();
+    private Map<String, LinkedHashMap<String, DotFile>> filesPerTopic = new LinkedHashMap<>();
 
     private final Path tmpDir;
 
@@ -134,7 +132,6 @@ public class DotRegistry {
      */
     public void store(String topic, String name, Supplier<Supplier<Graph>> graphCreator){
         if (enabled){
-            System.err.println(topic + name);
             Path topicPath = tmpDir.resolve(topic);
             if (!filesPerTopic.containsKey(topic)){
                 filesPerTopic.put(topic, new LinkedHashMap<>());
@@ -153,7 +150,7 @@ public class DotRegistry {
     }
 
     public LinkedHashMap<String, DotFile> getFilesPerTopic(String topic){
-        return filesPerTopic.getOrDefault(topic, new LinkedHashMap<>());
+        return filesPerTopic.getOrDefault(topic == null ? "" : topic, new LinkedHashMap<>());
     }
 
     public boolean has(String topic, String name){
@@ -210,21 +207,21 @@ public class DotRegistry {
         });
         for (Bit bit : botAnchor.value) {
             bl.walkBits(bit, b -> {
-                nodes.get(b).addLink((String[])b.deps().stream().map(d -> d.bitNo + "").toArray(String[]::new));
-            }, b -> false, alreadyVisited);
+                nodes.get(b).addLink((String[])b.deps().stream().sorted(Comparator.comparingLong(d -> d.bitNo)).map(d -> d.bitNo + "").toArray(String[]::new));
+            }, b -> false, alreadyVisited, b -> b.deps().stream().sorted(Comparator.comparingLong(d -> d.bitNo)).collect(Collectors.toList()));
         }
-        for (Anchor anchor : topAnchors) {
+        topAnchors.stream().sorted(Comparator.comparing(s -> s.name)).forEach(anchor -> {
             Lattices.Value val = anchor.value;
             String nodeId = anchor.name;
             MutableNode paramNode = mutNode(nodeId);
             paramNode.add(Color.GREEN, Color.GREEN.font());
             nodeList.add(paramNode);
             val.stream().map(nodes::get).forEach(n -> n.addLink(paramNode));
-        }
+        });
         MutableNode ret = mutNode(botAnchor.name);
         ret.add(Color.BLUE, Color.BLUE.font());
         nodeList.add(ret);
         ret.addLink((MutableNode[])botAnchor.value.stream().map(nodes::get).toArray(MutableNode[]::new));
-        return graph(name).directed().graphAttr().with(RankDir.BOTTOM_TO_TOP).graphAttr().with(Font.name("Helvetica")).with((MutableNode[])nodeList.toArray(new MutableNode[0]));
+        return graph(name).directed().nodeAttr().with(Font.name("Helvetica")).graphAttr().with(RankDir.BOTTOM_TO_TOP).graphAttr().with(Font.name("Helvetica")).with((MutableNode[])nodeList.toArray(new MutableNode[0]));
     }
 }

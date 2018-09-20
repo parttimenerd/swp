@@ -9,7 +9,6 @@ import org.junit.runner.RunWith;
 
 import java.lang.annotation.*;
 import java.math.BigDecimal;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.*;
 
@@ -17,10 +16,8 @@ import static java.lang.annotation.ElementType.*;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import static nildumu.Context.INFTY;
 import static nildumu.Lattices.*;
-import static nildumu.MethodInvocationHandler.*;
+import static nildumu.MethodInvocationHandler.BitGraph;
 import static nildumu.Util.Box;
-import static nildumu.Util.p;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @RunWith(JUnitQuickcheck.class)

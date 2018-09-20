@@ -8,8 +8,7 @@ import java.util.stream.*;
 import swp.util.Pair;
 
 import static nildumu.Lattices.B.*;
-import static nildumu.Util.log2;
-import static nildumu.Util.toBinaryString;
+import static nildumu.Util.*;
 
 /**
  * The basic lattices needed for the project

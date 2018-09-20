@@ -1,7 +1,6 @@
 package nildumu;
 
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.util.HashSet;
 import java.util.function.BiPredicate;
@@ -9,12 +8,10 @@ import java.util.stream.Stream;
 
 import swp.util.Pair;
 
-import static nildumu.Lattices.BasicSecLattice.HIGH;
-import static nildumu.Lattices.BasicSecLattice.LOW;
+import static nildumu.Lattices.BasicSecLattice.*;
 import static nildumu.Lattices.bl;
 import static nildumu.Util.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests for all the basic lattices. These lattices are the foundation of the whole analysis, they should
