@@ -6,7 +6,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import static java.time.Duration.ofMillis;
 import static nildumu.Processor.process;
-import static nildumu.Util.iter;
+import static nildumu.util.Util.iter;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 public class LoopTests {
@@ -81,6 +81,15 @@ public class LoopTests {
         parse("h input int h = 0bu;\n" +
                 "while (h){\n" +
                 "\th = h;\n" +
+                "}\n" +
+                "l output int o = h").leaks(1).run();
+    }
+
+    @Test
+    public void testBasicLoop3_condensed(){
+        parse("h input int h = 0bu;\n" +
+                "while (h){\n" +
+                "\th = 1;\n" +
                 "}\n" +
                 "l output int o = h").leaks(1).run();
     }

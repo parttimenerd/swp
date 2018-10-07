@@ -5,9 +5,10 @@ import java.util.function.*;
 import java.util.logging.*;
 import java.util.stream.*;
 
+import nildumu.util.*;
 import swp.util.Pair;
 
-import static nildumu.DefaultMap.ForbiddenAction.*;
+import static nildumu.util.DefaultMap.ForbiddenAction.*;
 import static nildumu.Lattices.*;
 import static nildumu.Parser.*;
 
@@ -357,21 +358,7 @@ public class Context {
         boolean somethingChanged = false;
         if (inLoopMode() && nodeValue(node) != vl.bot()) { // dismiss first iteration
             Value oldValue = nodeValue(node);
-            List<Bit> newBits = new ArrayList<>();
-            somethingChanged = vl.mapBits(oldValue, newValue, (a, b) -> {
-                boolean changed = false;
-                if (a.value() == null){
-                    a.value(oldValue); // newly created bit
-                    changed = true;
-                    newBits.add(a);
-                }
-                return merge(a, b) || changed;
-            }).stream().anyMatch(p -> p);
-            if (newBits.size() > 0){
-                newValue = Stream.concat(oldValue.stream(), newBits.stream()).collect(Value.collector());
-            } else {
-                newValue = oldValue;
-            }
+            merge(oldValue, newValue);
             if (somethingChanged){
                 nodeValueState.nodeVersionMap.put(node, nodeValueState.nodeVersionMap.get(node) + 1);
             }
@@ -380,6 +367,34 @@ public class Context {
         }
         nodeValue(node, newValue);
         newValue.description(node.getTextualId()).node(node);
+        return somethingChanged;
+    }
+
+    boolean merge(Value oldValue, Value newValue){
+        /*List<Bit> newBits = new ArrayList<>();
+        somethingChanged = vl.mapBits(oldValue, newValue, (a, b) -> {
+            boolean changed = false;
+            if (a.value() == null){
+                a.value(oldValue); // newly created bit
+                changed = true;
+                newBits.add(a);
+            }
+            return merge(a, b) || changed;
+        }).stream().anyMatch(p -> p);
+        if (newBits.size() > 0){
+            newValue = Stream.concat(oldValue.stream(), newBits.stream()).collect(Value.collector());
+        } else {
+            newValue = oldValue;
+        }*/
+        boolean somethingChanged = false;
+        int i = 1;
+        for (; i <= Math.min(oldValue.size(), newValue.size()); i++){
+            somethingChanged = merge(oldValue.get(i), newValue.get(i)) || somethingChanged;
+        }
+        for (; i <= newValue.size(); i++){
+            oldValue.add(newValue.get(i));
+            somethingChanged = true;
+        }
         return somethingChanged;
     }
 

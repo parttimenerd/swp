@@ -3,6 +3,8 @@ package nildumu;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import nildumu.util.DefaultMap;
+
 import static nildumu.Lattices.*;
 
 /**

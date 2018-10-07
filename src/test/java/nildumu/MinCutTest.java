@@ -12,12 +12,14 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.*;
 
+import nildumu.util.DefaultMap;
+
 import static java.lang.annotation.ElementType.*;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import static nildumu.Context.INFTY;
 import static nildumu.Lattices.*;
 import static nildumu.MethodInvocationHandler.BitGraph;
-import static nildumu.Util.Box;
+import static nildumu.util.Util.Box;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @RunWith(JUnitQuickcheck.class)

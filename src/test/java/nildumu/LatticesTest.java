@@ -10,7 +10,7 @@ import swp.util.Pair;
 
 import static nildumu.Lattices.BasicSecLattice.*;
 import static nildumu.Lattices.bl;
-import static nildumu.Util.*;
+import static nildumu.util.Util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**

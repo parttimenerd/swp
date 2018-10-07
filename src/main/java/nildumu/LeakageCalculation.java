@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import guru.nidi.graphviz.model.Graph;
+import nildumu.util.DefaultMap;
 
 import static nildumu.Lattices.*;
 

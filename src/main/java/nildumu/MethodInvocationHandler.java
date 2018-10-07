@@ -8,6 +8,7 @@ import java.util.stream.*;
 
 import guru.nidi.graphviz.engine.*;
 import guru.nidi.graphviz.model.Graph;
+import nildumu.util.*;
 import swp.util.Pair;
 
 import static nildumu.CallGraph.CallNode;
@@ -15,7 +16,7 @@ import static nildumu.Context.*;
 import static nildumu.Lattices.B.U;
 import static nildumu.Lattices.*;
 import static nildumu.Parser.*;
-import static nildumu.Util.p;
+import static nildumu.util.Util.p;
 
 /**
  * Handles the analysis of methods → implements the interprocedural part of the analysis.
@@ -224,7 +225,7 @@ public abstract class MethodInvocationHandler {
 
         final MethodInvocationHandler botHandler;
 
-        private DefaultMap<Parser.MethodNode, Integer> methodCallCounter = new DefaultMap<>((map, method) -> 0);
+        private DefaultMap<MethodNode, Integer> methodCallCounter = new DefaultMap<>((map, method) -> 0);
 
         CallStringHandler(int maxRec, MethodInvocationHandler botHandler) {
             this.maxRec = maxRec;
@@ -556,6 +557,7 @@ public abstract class MethodInvocationHandler {
             Processor.process(c, callSite.definition.body);
             Value ret = c.getReturnValue();
             c.popMethodInvocationState();
+            c.forceMethodInvocationHandler(this);
             return new BitGraph(c, parameters, ret);
         }
 

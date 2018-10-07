@@ -16,23 +16,26 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
      */
     static class VisRet {
 
-        static final VisRet DEFAULT = new VisRet(false, Collections.emptyList());
+        static final VisRet DEFAULT = new VisRet(false, Collections.emptyList(), Collections.emptyList());
 
         final boolean removeCurrentStatement;
 
         final List<StatementNode> statementsToAdd;
 
-        VisRet(boolean removeCurrentStatement, List<StatementNode> statementsToAdd) {
+        final List<StatementNode> statementsToPrepend;
+
+        VisRet(boolean removeCurrentStatement, List<StatementNode> statementsToAdd, List<StatementNode> statementsToPrepend) {
             this.removeCurrentStatement = removeCurrentStatement;
             this.statementsToAdd = statementsToAdd;
+            this.statementsToPrepend = statementsToPrepend;
         }
 
         VisRet(boolean removeCurrentStatement, StatementNode... statementsToAdd) {
-            this(removeCurrentStatement, Arrays.asList(statementsToAdd));
+            this(removeCurrentStatement, Arrays.asList(statementsToAdd), Collections.emptyList());
         }
 
         boolean isDefault(){
-            return !removeCurrentStatement && statementsToAdd.isEmpty();
+            return !removeCurrentStatement && statementsToAdd.isEmpty() && statementsToPrepend.isEmpty();
         }
     }
 
@@ -114,6 +117,7 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
         List<StatementNode> blockPartNodes = new ArrayList<>();
         for (StatementNode child : block.statementNodes){
             VisRet ret = child.accept(this);
+            blockPartNodes.addAll(ret.statementsToPrepend);
             if (!ret.removeCurrentStatement) {
                 blockPartNodes.add(child);
             }
@@ -150,11 +154,13 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
         pushNewVariablesScope();
 
         VisRet toAppend = ifBlock.accept(this);
+        ifBlock.statementNodes.addAll(0, toAppend.statementsToPrepend);
         ifBlock.statementNodes.addAll(toAppend.statementsToAdd);
         Map<Variable, Variable> ifRedefines = newVariables.pop();
 
         pushNewVariablesScope();
         toAppend = elseBlock.accept(this);
+        elseBlock.statementNodes.addAll(0, toAppend.statementsToPrepend);
         elseBlock.statementNodes.addAll(toAppend.statementsToAdd);
         Map<Variable, Variable> elseRedefines = newVariables.pop();
 
@@ -175,21 +181,51 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
             localVarDecl.definition = created;
             phiStatements.add(localVarDecl);
         }
-        return new VisRet(false, phiStatements);
+        return new VisRet(false, phiStatements, Collections.emptyList());
     }
 
     @Override
     public VisRet visit(WhileStatementNode whileStatement) {
         VisRet ret = visit(whileStatement, whileStatement.body, new BlockNode(whileStatement.location, new ArrayList<>()));
+        List<StatementNode> prepend = new ArrayList<>(ret.statementsToPrepend);
+        List<StatementNode> stmtsToAdd = new ArrayList<>();
         for (StatementNode statementNode : ret.statementsToAdd) {
             PhiNode phi = (PhiNode)((VariableDeclarationNode)statementNode).expression;
             Variable whileEnd = phi.joinedVariables.get(0).definition;
             Variable beforeWhile = phi.joinedVariables.get(1).definition;
-            Variable newWhilePhiVar = basicCreate(whileEnd);
-            replaceVariable(beforeWhile, newWhilePhiVar, whileStatement);
+            Variable newWhilePhiPreVar = create(whileEnd);
+            Variable newWhilePhiVar = create(newWhilePhiPreVar);
+
+            replaceVariable(beforeWhile, newWhilePhiVar, whileStatement.body);
+            //prepend.add(new VariableDeclarationNode(whileStatement.location, newWhilePhiVar, phi));
+            whileStatement.addPreCondVarDefs(Arrays.asList(new VariableDeclarationNode(whileStatement.location, newWhilePhiPreVar, phi)));
+            //System.err.println(newWhilePhiPreVar + "  " + newWhilePhiVar);
+            replaceVariable(beforeWhile, newWhilePhiPreVar, whileStatement.conditionalExpression);
+
             whileStatement.body.statementNodes.add(0, new VariableDeclarationNode(whileStatement.location, newWhilePhiVar, phi));
+            stmtsToAdd.add(new VariableDeclarationNode(statementNode.location, newWhilePhiVar, phi));
         }
-        return ret;
+        return new VisRet(ret.removeCurrentStatement, stmtsToAdd, prepend);
+    }
+
+    /**
+     * Replaces all controlDeps that are exactly the passed variable
+     */
+    private void replaceVariableInPhiConds(Variable var, ExpressionNode expr, MJNode node){
+        node.accept(new NodeVisitor<Object>() {
+
+            @Override
+            public Object visit(MJNode node) {
+                visitChildrenDiscardReturn(node);
+                return null;
+            }
+
+            @Override
+            public Object visit(PhiNode phi) {
+                phi.alterCondDeps(e -> e instanceof VariableAccessNode && ((VariableAccessNode) e).definition == var ? expr : e);
+                return null;
+            }
+        });
     }
 
     @Override
@@ -264,6 +300,7 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
             MJNode child = (MJNode)childAst;
             if (child instanceof StatementNode){
                 VisRet ret = child.accept(this);
+                retStatements.addAll(ret.statementsToPrepend);
                 if (!ret.removeCurrentStatement){
                     retStatements.add((StatementNode)child);
                 }
@@ -272,7 +309,7 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
                 child.accept(this);
             }
         }
-        return new VisRet(true, retStatements);
+        return new VisRet(true, retStatements, Collections.emptyList());
     }
 
     /**
@@ -320,6 +357,25 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
             }
         });
     }
+
+    static void replaceVariable(Variable search, ExpressionNode replacement, MJNode node){
+        node.accept(new NodeVisitor<Object>() {
+            @Override
+            public Object visit(MJNode node) {
+                visitChildrenDiscardReturn(node);
+                return null;
+            }
+
+            @Override
+            public Object visit(VariableAccessNode variableAccess) {
+                if (variableAccess.definition == search){
+                    variableAccess.definingExpression = replacement;
+                }
+                return null;
+            }
+        });
+    }
+
 
     static ExpressionNode replaceVariableWithExpression(Variable search, ExpressionNode replacement, ExpressionNode node){
         return node.accept(new NodeVisitor<ExpressionNode>() {
@@ -416,10 +472,12 @@ public class SSAResolution implements NodeVisitor<SSAResolution.VisRet> {
 
             @Override
             public Object visit(VariableAccessNode variableAccess) {
+               // System.err.println("----" + variableAccess + "  " + variableAccess.definingExpression);
                 if (variableAccess.definingExpression != null){
                     return null;
                 }
                 variableAccess.definingExpression = definingExprs.get(variableAccess.definition);
+                //System.err.println("----" + variableAccess + "  " + variableAccess.definingExpression);
                 if (variableAccess.definingExpression instanceof VariableAccessNode && !(variableAccess.definingExpression instanceof ParameterAccessNode)){
                     accessesToAccesses.add(variableAccess);
                 }

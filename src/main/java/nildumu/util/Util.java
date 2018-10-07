@@ -1,4 +1,4 @@
-package nildumu;
+package nildumu.util;
 
 import java.time.temporal.ValueRange;
 import java.util.*;
@@ -23,7 +23,7 @@ public class Util {
         return new Pair<>(s,t);
     }
 
-    static Stream<Lattices.Bit> stream(Bit x, Bit y) {
+    static Stream<Bit> stream(Bit x, Bit y) {
         return Stream.of(x, y);
     }
 
@@ -31,7 +31,7 @@ public class Util {
         return bits.stream().flatMap(p -> Stream.of(p.first, p.second));
     }
 
-    static IntStream stream(ValueRange range) {
+    public static IntStream stream(ValueRange range) {
         return IntStream.range((int) range.getMinimum(), (int) range.getMaximum());
     }
 

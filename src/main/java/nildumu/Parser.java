@@ -2,6 +2,7 @@ package nildumu;
 
 import java.io.Serializable;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.*;
 
 import swp.SWPException;
@@ -580,6 +581,8 @@ public class Parser implements Serializable {
                 return  null;
             }
         }
+
+        final Set<BaseAST> alreadyVisited = new HashSet<>();
 
         /**
          * Visit all direct children with the visitor and discard the results
@@ -1426,6 +1429,13 @@ public class Parser implements Serializable {
             this.expression = expression;
         }
 
+        public VariableAssignmentNode(Location location, Variable variable, ExpressionNode expression) {
+            super(location);
+            this.variable = variable.name;
+            this.expression = expression;
+            this.definition = variable;
+        }
+
         @Override
         public String type() {
             return "local_variable_assignment_statement";
@@ -1524,6 +1534,7 @@ public class Parser implements Serializable {
      * A while statement
      */
     public static class WhileStatementNode extends ConditionalStatementNode {
+        private final List<VariableDeclarationNode> preCondVarDefs = new ArrayList<>();
         public final BlockNode body;
 
         public WhileStatementNode(Location location, ExpressionNode conditionalExpression, StatementNode body) {
@@ -1542,7 +1553,9 @@ public class Parser implements Serializable {
 
         @Override
         public String toString() {
-            return String.format("while (%s) %s", conditionalExpression, body);
+            return String.format("while [%s] (%s) %s", preCondVarDefs.stream()
+                    .map(MJNode::toString).collect(Collectors.joining(";")),
+                    conditionalExpression, body);
         }
 
         @Override
@@ -1557,7 +1570,8 @@ public class Parser implements Serializable {
 
         @Override
         public List<BaseAST> children() {
-            return Utils.makeArrayList(conditionalExpression, body);
+            return Stream.concat(preCondVarDefs.stream(), Stream.of(conditionalExpression, body))
+                    .collect(Collectors.toList());
         }
 
         @Override
@@ -1577,7 +1591,17 @@ public class Parser implements Serializable {
 
         @Override
         public String toPrettyString(String indent, String incr) {
-            return String.format("%swhile (%s) {\n%s\n%s}", indent, conditionalExpression, body.toPrettyString(indent + incr, incr), indent);
+            return String.format("%swhile [%s] (%s) {\n%s\n%s}", indent, preCondVarDefs.stream()
+                    .map(MJNode::toString).collect(Collectors.joining(";")),
+                    conditionalExpression, body.toPrettyString(indent + incr, incr), indent);
+        }
+
+        public List<VariableDeclarationNode> getPreCondVarDefs(){
+            return Collections.unmodifiableList(preCondVarDefs);
+        }
+
+        public void addPreCondVarDefs(List<VariableDeclarationNode> nodes){
+            preCondVarDefs.addAll(nodes);
         }
     }
 
@@ -1588,6 +1612,7 @@ public class Parser implements Serializable {
             super(location);
             this.conditionalExpression = conditionalExpression;
         }
+
     }
 
     /**
@@ -1666,7 +1691,9 @@ public class Parser implements Serializable {
         public String toPrettyString(String indent, String incr) {
             String thenStr = ifBlock.toPrettyString(indent + incr, incr);
             if (hasElseBlock()) {
-                return String.format("%sif (%s) {\n%s\n%s} else {\n%s\n%s}", indent, conditionalExpression, thenStr, indent, elseBlock.toPrettyString(indent + incr, incr), indent);
+                return String.format("%sif (%s) {\n%s\n%s} else {\n%s\n%s}", indent,
+                        conditionalExpression, thenStr, indent,
+                        elseBlock.toPrettyString(indent + incr, incr), indent);
             } else {
                 return String.format("%sif (%s) {\n%s\n%s}", indent, conditionalExpression, thenStr, indent);
             }
@@ -2318,6 +2345,12 @@ public class Parser implements Serializable {
             this.ident = ident;
         }
 
+        public VariableAccessNode(Location location, Variable variable, ExpressionNode definingExpression) {
+            super(location);
+            this.ident = variable.name;
+            this.definition = variable;
+        }
+
         @Override
         public String toString() {
             return definition == null ? ident : definition.name;
@@ -2485,6 +2518,11 @@ public class Parser implements Serializable {
         @Override
         public String shortType() {
             return "ϕ";
+        }
+
+        public void alterCondDeps(Function<ExpressionNode, ExpressionNode> mapper){
+            controlDeps = controlDeps.stream().map(mapper)
+                    .collect(Collectors.toList());
         }
     }
 

@@ -7,12 +7,14 @@ import java.util.stream.*;
 import guru.nidi.graphviz.attribute.*;
 import guru.nidi.graphviz.model.*;
 import guru.nidi.graphviz.model.Node;
+import nildumu.util.DefaultMap;
 import swp.lexer.Location;
 import swp.parser.lr.BaseAST;
+import swp.util.*;
 
 import static guru.nidi.graphviz.model.Factory.*;
 import static nildumu.Parser.*;
-import static nildumu.Util.Box;
+import static nildumu.util.Util.Box;
 
 /**
  * Call graph for a program that allows to fixpoint iterate over the call graph using an
@@ -199,11 +201,11 @@ public class CallGraph {
                 new HashMap<>());
     }
 
-    public static Map<CallNode, Integer> calcLoopDepth(CallNode mainNode, Map<CallNode, Set<CallNode>> dominators){
+    public static Map<CallNode, Integer> calcLoopDepth(CallNode mainNode, Map<CallNode, Set<CallNode>> dominators) {
         Set<CallNode> loopHeaders = new HashSet<>();
         dominators.forEach((n, dom) -> {
             dom.forEach(d -> {
-                if (n.callees.contains(d)){
+                if (n.callees.contains(d)) {
                     loopHeaders.add(d);
                 }
             });
@@ -214,30 +216,38 @@ public class CallGraph {
         });
         Map<CallNode, Set<CallNode>> dominatesDirectly = new DefaultMap<>((n, map) -> new HashSet<>());
         dominates.entrySet().forEach(e -> {
-            for (CallNode dominated : e.getValue()){
-                if (e.getValue().stream().filter(d -> d != dominated && d != e.getKey()).allMatch(d -> !(dominates.get(d).contains(dominated)))){
+            for (CallNode dominated : e.getValue()) {
+                if (e.getValue().stream().filter(d -> d != dominated && d != e.getKey()).allMatch(d -> !(dominates.get(d).contains(dominated)))) {
                     dominatesDirectly.get(e.getKey()).add(dominated);
                 }
             }
         });
 
         Map<CallNode, Integer> loopDepths = new HashMap<>();
-        Box<BiConsumer<CallNode, Integer>> action = new Box<>(null);
-        action.val = (node, depth) -> {
-            if (loopDepths.containsKey(node)){
+        Map<CallNode, CallNode> loopHeaderPerNode = new HashMap<>();
+        Box<TriConsumer<CallNode, CallNode, List<Pair<CallNode, Integer>>>> action = new Box<>(null);
+        action.val = (node, header, depth) -> {
+            if (loopDepths.containsKey(node)) {
                 return;
             }
             if (loopHeaders.contains(node)) {
-                depth += 1;
+                depth = new ArrayList<>(depth);
+                depth.add(0, new Pair<>(node, depth.get(0).second + 1));
             }
-            loopDepths.put(node, depth);
-            for (CallNode callNode : dominatesDirectly.get(node)) {
-                if (node != callNode) {
-                    action.val.accept(callNode, depth);
+            for (int i = 0; i < depth.size(); i++) {
+                if (i == depth.size() - 1 || node.calledCallNodesAndSelf().contains(depth.get(i).first)) {
+                    loopDepths.put(node, depth.get(i).second);
+                    loopHeaderPerNode.put(node, depth.get(i).first);
+                    break;
+                }
+            }
+            for (CallNode Node : dominatesDirectly.get(node)) {
+                if (node != Node) {
+                    action.val.accept(Node, loopHeaders.contains(node) ? node : header, depth);
                 }
             }
         };
-        action.val.accept(mainNode, 0);
+        action.val.accept(mainNode, null, new ArrayList<>(Collections.singletonList(new Pair<>(null, 0))));
         return loopDepths;
     }
 

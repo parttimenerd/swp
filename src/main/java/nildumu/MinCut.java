@@ -7,12 +7,13 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import nildumu.util.*;
 import swp.util.Pair;
 
 import static nildumu.Context.INFTY;
 import static nildumu.Lattices.B.U;
 import static nildumu.Lattices.*;
-import static nildumu.Util.p;
+import static nildumu.util.Util.p;
 
 /**
  * Computation of the minimum cut on graphs.

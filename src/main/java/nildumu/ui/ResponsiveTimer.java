@@ -1,4 +1,4 @@
-package nildumu;
+package nildumu.ui;
 
 import java.time.Duration;
 import java.util.*;

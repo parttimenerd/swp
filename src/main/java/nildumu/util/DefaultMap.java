@@ -1,4 +1,4 @@
-package nildumu;
+package nildumu.util;
 
 import java.util.*;
 import java.util.function.BiFunction;

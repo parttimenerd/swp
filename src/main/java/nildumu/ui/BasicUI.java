@@ -24,7 +24,7 @@ import swp.LocatedSWPException;
 import swp.lexer.Location;
 
 import static nildumu.Lattices.*;
-import static nildumu.Util.p;
+import static nildumu.util.Util.p;
 
 public class BasicUI {
 

@@ -6,12 +6,13 @@ import java.util.*;
 import java.util.function.BiPredicate;
 import java.util.stream.*;
 
+import nildumu.util.Util;
 import swp.util.Pair;
 
 import static nildumu.Context.v;
 import static nildumu.Lattices.*;
 import static nildumu.Lattices.B.*;
-import static nildumu.Util.log2;
+import static nildumu.util.Util.log2;
 
 public interface Operator {
 
@@ -254,7 +255,7 @@ public interface Operator {
         public Value compute(Context c, Parser.MJNode node, List<Value> values) {
             currentNode = node;
             int maxWidth = values.stream().mapToInt(Value::size).max().getAsInt();
-            return IntStream.range(1, values.size() + 1).mapToObj(i -> computeBit(c, values.stream().map(v -> v.get(i)).collect(Collectors.toList()))).collect(Value.collector());
+            return IntStream.range(1, maxWidth + 1).mapToObj(i -> computeBit(c, values.stream().map(v -> v.get(i)).collect(Collectors.toList()))).collect(Value.collector());
         }
 
         abstract Bit computeBit(Context c, List<Bit> bits);
@@ -1000,15 +1001,15 @@ public interface Operator {
     static final BinaryOperator MODULO = new BinaryOperator("+") {
         @Override
         Value compute(Context c, Value first, Value second) {
-            if (second.isPowerOfTwo() && !second.isNegative()){
+            if (second.isPowerOfTwo() && !second.isNegative()) {
                 return IntStream.range(1, c.maxBitWidth).mapToObj(i -> {
-                    if (i > log2(second.asInt())){
+                    if (i > log2(second.asInt())) {
                         return bl.create(ZERO);
                     }
                     return first.get(i);
                 }).collect(Value.collector());
             }
-            if (first.isConstant() && second.isConstant()){
+            if (first.isConstant() && second.isConstant()) {
                 return vl.parse(first.asInt() % second.asInt());
             }
             return createUnknownValue(first, second);

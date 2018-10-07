@@ -5,10 +5,11 @@ import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
 
+import nildumu.util.Util;
 import swp.util.Pair;
 
 import static nildumu.Lattices.B.*;
-import static nildumu.Util.*;
+import static nildumu.util.Util.*;
 
 /**
  * The basic lattices needed for the project
@@ -1349,6 +1350,11 @@ public class Lattices {
             }
             double twoLog = log2(asInt());
             return ((int)twoLog) == twoLog;
+        }
+
+        public void add(Bit bit){
+            assert bits.size() <= vl.bitWidth;
+            bits.add(bit);
         }
     }
 

@@ -80,7 +80,7 @@ public class SSATests {
      */
     @Test
     public void testTwoWhilesInARow(){
-        assertEquals("int r4 = ɸ[1](r3, r2);", toSSA("int r = 0;\n" +
+        assertEquals("int r8 = ɸ[1](r5, r4);", toSSA("int r = 0;\n" +
                 "     while (true) {\n" +
                 "        r = 3;\n" +
                 "     }\n" +

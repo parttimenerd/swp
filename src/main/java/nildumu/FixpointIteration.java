@@ -60,6 +60,19 @@ public class FixpointIteration {
                 return;
             }
             Parser.MJNode curNode = nodesToVisit.pop();
+            if (curNode instanceof Parser.WhileStatementNode){
+                for (Parser.VariableDeclarationNode preCondVarDef : ((Parser.WhileStatementNode) curNode).getPreCondVarDefs()) {
+                    for (BaseAST childNode : preCondVarDef.children()){
+                        if (childNode instanceof Parser.ExpressionNode){
+                            if (childNode instanceof Parser.VariableAccessNode){
+                                childNode = ((Parser.VariableAccessNode) childNode).definingExpression;
+                            }
+                            walkExpression(expressionConsumer, (Parser.ExpressionNode)childNode);
+                        }
+                    }
+                    preCondVarDef.accept(nodeVisitor);
+                }
+            }
             for (BaseAST childNode : curNode.children()){
                 if (childNode instanceof Parser.ExpressionNode){
                     if (childNode instanceof Parser.VariableAccessNode){
@@ -75,7 +88,11 @@ public class FixpointIteration {
                 if (curNode instanceof Parser.WhileStatementEndNode){
                     nodesToVisit.add(((Parser.WhileStatementEndNode) curNode).whileStatement);
                 } else {
-                    List<Parser.MJNode> nodesToAdd = curNode.children().stream().filter(c -> {
+                    List<BaseAST> children = curNode.children();
+                    if (curNode instanceof Parser.WhileStatementNode){
+                        children.removeAll(((Parser.WhileStatementNode) curNode).getPreCondVarDefs());
+                    }
+                    List<Parser.MJNode> nodesToAdd = children.stream().filter(c -> {
                         if (statementNodesToOmitOneTime.contains(c)) {
                             statementNodesToOmitOneTime.remove(c);
                             return false;
@@ -117,7 +134,9 @@ public class FixpointIteration {
             Thread.currentThread().interrupt();
             return;
         }
-        expression.children().stream().filter(c -> c instanceof Parser.ExpressionNode && !(c instanceof Parser.VariableAccessNode && !(c instanceof Parser.ParameterAccessNode)))
+        expression.children().stream().filter(c -> c instanceof Parser.ExpressionNode &&
+                !(c instanceof Parser.VariableAccessNode &&
+                        !(c instanceof Parser.ParameterAccessNode)))
                 .forEach(c -> walkExpression(visitor, (Parser.ExpressionNode) c));
         visitor.accept(expression);
     }

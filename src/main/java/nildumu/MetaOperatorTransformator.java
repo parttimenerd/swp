@@ -4,11 +4,12 @@ import java.util.*;
 import java.util.function.*;
 import java.util.stream.Collectors;
 
+import nildumu.util.DefaultMap;
 import swp.util.Pair;
 
 import static nildumu.Parser.*;
 import static nildumu.Parser.LexerTerminal.*;
-import static nildumu.Util.p;
+import static nildumu.util.Util.p;
 
 public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
 
@@ -32,6 +33,32 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
         ProgramNode newProgram = (ProgramNode)visit(program);
         setDefiningAndConditionalExpressions(newProgram);
         return newProgram;
+    }
+
+    ExpressionNode replaceAndWrapIfNeeded(ExpressionNode expression){
+        ExpressionNode tmpExpr = expression.accept(new ExpressionVisitor<ExpressionNode>() {
+
+            @Override
+            public ExpressionNode visit(ExpressionNode expression) {
+                return expression;
+            }
+
+            @Override
+            public ExpressionNode visit(PhiNode phi) {
+                return wrap(phi);
+            }
+
+            @Override
+            public ExpressionNode visit(VariableAccessNode variableAccess) {
+                return wrap(variableAccess);
+            }
+
+            ExpressionNode wrap(ExpressionNode expr){
+                return new BinaryOperatorNode(new SingleUnaryOperatorNode(expr, SELECT_OP, 1), new IntegerLiteralNode(expr.location, Lattices.vl.parse(1)), EQUALS);
+            }
+        });
+        replacedMap.put(expression, repl(tmpExpr));
+        return replacedMap.get(expression);
     }
 
     ExpressionNode replace(ExpressionNode expression){
@@ -256,8 +283,11 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
 
     @Override
     public MJNode visit(WhileStatementNode whileStatement){
-        ConditionalStatementNode stmt = new WhileStatementNode(whileStatement.location, replace(whileStatement.conditionalExpression),
+        ConditionalStatementNode stmt = new WhileStatementNode(whileStatement.location,
+                replaceAndWrapIfNeeded(whileStatement.conditionalExpression),
                 (StatementNode)whileStatement.body.accept(this));
+        ((WhileStatementNode) stmt).addPreCondVarDefs(whileStatement.getPreCondVarDefs().stream()
+                .map(v -> (VariableDeclarationNode)v.accept(this)).collect(Collectors.toList()));
         replacedCondStmtsMap.put(whileStatement, stmt);
         return stmt;
     }
@@ -309,6 +339,12 @@ public class MetaOperatorTransformator implements NodeVisitor<MJNode> {
                 visitChildrenDiscardReturn(assignment);
                 //assignment.expression = replace(assignment.expression);
                 variableToExpr.put(assignment.definition, assignment.expression);
+                return null;
+            }
+
+            @Override
+            public Object visit(WhileStatementNode whileStatement) {
+                visitChildrenDiscardReturn(whileStatement);
                 return null;
             }
         });
