@@ -100,6 +100,32 @@ public class SSATests {
         assertEquals(((Parser.VariableAssignmentNode)stmts.get(1)).definition, ((Parser.PhiNode)((Parser.VariableAssignmentNode)stmts.get(0)).expression).joinedVariables.get(0).definition);
     }
 
+    /**
+     * <code>
+     *     int _3_bla(int a) {
+     *    int r = 1;
+     *    while (a != 0){
+     *       a = 0
+     *    }
+     *    return r;
+     * }
+     * h input int h = 0b00u;
+     * l output int o = _3_bla(h);
+     * </code>
+     */
+    @Test
+    public void testWhileWithBasicAssignmentInLoop(){
+        toSSA("int _3_bla(int a) {\n" +
+                "   int r = 1;\n" +
+                "   while (a != 0){\n" +
+                "      a = 0\n" +
+                "   }\n" +
+                "   return r;\n" +
+                "}\n" +
+                "h input int h = 0b00u;\n" +
+                "l output int o = _3_bla(h);");
+    }
+
     @Test
     public Parser.ProgramNode toSSA(String program){
         System.out.println(Parser.process(program).toPrettyString());

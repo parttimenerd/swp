@@ -784,7 +784,7 @@ public interface Operator {
 
         @Override
         Bit computeBit(Context c, List<Bit> bits) {
-            List<Bit> nonBots = bits.stream().filter(b -> b.val() == X).collect(Collectors.toList());
+            List<Bit> nonBots = bits.stream().filter(b -> b.val() != X).collect(Collectors.toList());
             if (nonBots.size() == 1){
                 return nonBots.get(0);
             }

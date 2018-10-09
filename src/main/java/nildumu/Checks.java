@@ -97,8 +97,8 @@ public class Checks {
     public static class CheckError extends NildumuError {
         final ErrorPipe errors;
 
-        public CheckError(ErrorPipe errors) {
-            super(errors.toLongString());
+        public CheckError(MJNode node, ErrorPipe errors) {
+            super(errors.toLongString() + "\n\n" + node.toPrettyString());
             this.errors = errors;
         }
     }
@@ -245,14 +245,22 @@ public class Checks {
         // check
         return node.accept(new ErrorReportingVisitor(ErrorType.UNEVALUATED) {
 
+            MethodNode curMethod = null;
+
             void check(Variable variable){
-                if (!validVariables.contains(variable)){
+                if (!validVariables.contains(variable) &&
+                        (curMethod == null ||
+                                !curMethod.parameters.parameterNodes.stream()
+                                        .anyMatch(p -> p.definition == variable))){
                     error("Not evaluated variable %s", variable);
                 }
             }
 
             void check(ExpressionNode expression){
-                if (!validExpressions.contains(expression)){
+                if (!validExpressions.contains(expression)
+                && (curMethod == null || !(expression instanceof VariableAccessNode) ||
+                        !curMethod.parameters.parameterNodes.stream()
+                                .anyMatch(p -> p.definition == ((VariableAccessNode) expression).definition))){
                     error("Not evaluated expression %s", expression);
                 }
             }
@@ -287,6 +295,16 @@ public class Checks {
             public ErrorPipe visit(VariableAccessNode variableAccess) {
                 return null;
             }
+
+            @Override
+            public ErrorPipe visit(MethodNode method) {
+                curMethod = method;
+                currentPath.add(method);
+                visitChildrenDiscardReturn(method);
+                currentPath.pop();
+                curMethod = method;
+                return errors;
+            }
         });
     }
 
@@ -300,7 +318,7 @@ public class Checks {
         ErrorPipe pipe = definitionChecks(node);
         pipe.addAll(checkForReferencesToInvalidExpressionsAndVariables(node));
         if (pipe.size() > 0) {
-            throw new CheckError(pipe);
+            throw new CheckError(node, pipe);
         }
     }
 }

@@ -196,11 +196,8 @@ public class Context {
 
     private final Stack<Mods> modsStack = new Stack<>();
 
-    private final DefaultMap<Bit, ModsCreator> replMap = new DefaultMap<>(new WeakHashMap<>(), new DefaultMap.Extension<Bit, ModsCreator>() {
-        @Override
-        public ModsCreator defaultValue(Map<Bit, ModsCreator> map, Bit key) {
+    private final DefaultMap<Bit, ModsCreator> replMap = new DefaultMap<>((map, bit) -> {
             return ((c, b, a) -> choose(b, a) == a ? new Mods(b, a) : Mods.empty());
-        }
     });
 
     /*-------------------------- loop mode specific -------------------------------*/
